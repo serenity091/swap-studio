@@ -1,0 +1,50 @@
+name: Publish Swap Studio to GitHub Pages
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Require Firebase configuration
+        env:
+          FIREBASE_CONFIG: ${{ vars.FIREBASE_WEB_CONFIG }}
+        run: node -e 'const c = JSON.parse(process.env.FIREBASE_CONFIG || require("fs").readFileSync("firebase/web-config.json", "utf8")); for (const k of ["apiKey","authDomain","projectId","storageBucket","appId"]) if (!c[k]) throw new Error("Add the FIREBASE_WEB_CONFIG repository variable before deploying.");'
+      - run: npm test
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm run test:rules
+      - run: npm run build
+        env:
+          VITE_FIREBASE_CONFIG: ${{ vars.FIREBASE_WEB_CONFIG }}
+          VITE_GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3-pro-image' }}
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

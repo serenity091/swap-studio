@@ -1,0 +1,15 @@
+Use the uploaded model image as the direct edit target . Remove the bra completely and reconstruct the model’s natural bare back and skin underneath. Preserve:
+- the same model
+- exact pose
+- shoulders, arms, torso, and head position
+- hair
+- camera angle
+- crop and framing
+- lighting, shadows, and background
+- overall premium ecommerce photo quality Remove all visible bra elements:
+- straps
+- back band
+- closure
+- lace
+- edges under the arms
+- any remaining garment lines or pressure marks Reconstruct a natural bare back with realistic skin texture, tone, and shading that matches the surrounding body. Do not add any new clothing, accessories, or extra retouching. Final result: the same back-view model photo, but with a clean bare back and shoulders, suitable for future garment compositing.

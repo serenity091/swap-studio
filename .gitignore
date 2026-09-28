@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+*.tsbuildinfo
+.DS_Store
+tmp/
+test-results/
+playwright-report/
+# Original model photos are local source material, not public website assets.
+/*.jpg
+/*.jpeg
+/*.png
+
+firebase/cors.json
+*-debug.log

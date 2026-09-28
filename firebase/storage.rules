@@ -1,0 +1,14 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /users/{userId}/{recordId}/{slot} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null && request.auth.uid == userId
+        && slot in ['front', 'back', 'referenceFront', 'referenceBack', 'identityFront', 'identityBack']
+        && request.resource.size > 0 && request.resource.size < 30 * 1024 * 1024
+        && request.resource.contentType in ['image/jpeg', 'image/png', 'image/webp'];
+      allow delete: if false;
+    }
+    match /{allPaths=**} { allow read, write: if false; }
+  }
+}

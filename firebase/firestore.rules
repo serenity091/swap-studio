@@ -1,0 +1,59 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function imageValid(image, slot, recordId) {
+      return image is map
+        && image.keys().hasAll(['path', 'name', 'mimeType', 'width', 'height'])
+        && image.keys().hasOnly(['path', 'name', 'mimeType', 'width', 'height'])
+        && image.path == 'users/' + request.auth.uid + '/' + recordId + '/' + slot
+        && image.name is string && image.name.size() <= 255
+        && image.mimeType in ['image/png', 'image/jpeg', 'image/webp']
+        && image.width is int && image.width > 0 && image.width <= 16384
+        && image.height is int && image.height > 0 && image.height <= 16384;
+    }
+    function validRecord(recordId) {
+      let d = request.resource.data;
+      return signedIn()
+        && d.keys().hasAll(['id', 'kind', 'name', 'ownerId', 'ownerName', 'createdAt', 'model', 'resolution', 'promptVersion', 'assets', 'identityId', 'identityName'])
+        && d.keys().hasOnly(['id', 'kind', 'name', 'ownerId', 'ownerName', 'createdAt', 'model', 'resolution', 'promptVersion', 'assets', 'identityId', 'identityName'])
+        && d.id == recordId && d.ownerId == request.auth.uid
+        && d.kind in ['identity', 'swap']
+        && d.name is string && d.name.size() > 0 && d.name.size() <= 120
+        && d.ownerName is string && d.ownerName.size() <= 100
+        && d.createdAt is int
+        && d.model is string && d.model.size() <= 120
+        && d.resolution in ['1K', '2K', '4K']
+        && d.promptVersion is string && d.promptVersion.size() <= 80
+        && d.identityId is string && d.identityName is string && d.identityName.size() <= 120
+        && d.assets is map
+        && d.assets.keys().hasAll(['front', 'back', 'referenceFront', 'referenceBack'])
+        && imageValid(d.assets.front, 'front', recordId)
+        && imageValid(d.assets.back, 'back', recordId)
+        && imageValid(d.assets.referenceFront, 'referenceFront', recordId)
+        && imageValid(d.assets.referenceBack, 'referenceBack', recordId)
+        && ((d.kind == 'identity'
+            && d.identityId == '' && d.identityName == ''
+            && d.assets.keys().hasAll(['identityFront', 'identityBack'])
+            && d.assets.keys().hasOnly(['front', 'back', 'referenceFront', 'referenceBack', 'identityFront', 'identityBack'])
+            && imageValid(d.assets.identityFront, 'identityFront', recordId)
+            && imageValid(d.assets.identityBack, 'identityBack', recordId))
+          || (d.kind == 'swap'
+            && d.identityId.size() > 0
+            && d.assets.keys().hasOnly(['front', 'back', 'referenceFront', 'referenceBack'])
+            && exists(/databases/$(database)/documents/records/$(d.identityId))
+            && get(/databases/$(database)/documents/records/$(d.identityId)).data.kind == 'identity'));
+    }
+    match /records/{recordId} {
+      allow read: if signedIn();
+      allow create: if validRecord(recordId);
+      allow update: if signedIn() && resource.data.ownerId == request.auth.uid
+        && request.resource.data.kind == resource.data.kind
+        && request.resource.data.identityId == resource.data.identityId
+        && validRecord(recordId);
+      allow delete: if false;
+    }
+    // Passwords and Google API keys never belong in Firestore.
+    match /{document=**} { allow read, write: if false; }
+  }
+}

@@ -8,7 +8,7 @@ A GitHub Pages app for creating fictional adult model identities and swapping br
 
 ## Workflow
 
-1. Sign in or create an account using Firebase Authentication.
+1. Sign in with an account created by the owner in Firebase Authentication.
 2. Enter a Google AI Studio API key with access to the configured image model and paid API billing. The app verifies model access without generating a paid image. Verification does not guarantee available billing or quota.
 3. **Create identities:** name the identity and upload front/back reference photos. Generate the front first, then the matching back in the same API conversation, including the model's original thought signatures.
 4. Review the pair and confirm that the new fictional identity is different and consistent. Only then run the neutral gray front and bare-back prompts.
@@ -43,7 +43,7 @@ Open the URL printed by Vite. Without Firebase configuration, the setup screen o
 
 The Firebase web configuration is public app configuration, safe to include in this client app. It is different from a Gemini key or a Firebase service-account private key. Rules and Firebase Authentication control access. Never include service-account credentials or a shared Gemini key in the repository, build variables, or browser bundle.
 
-**Shared membership:** the shipped sign-up form allows anyone to create an account. Every such account can read the shared library. If this is an invite-only team studio, remove public sign-up and provision invited users or add an explicit membership allowlist before publishing the project URL. A private GitHub repository does not make the deployed website or browser JavaScript private.
+**Private access:** public sign-up is disabled in both the UI and the live Firebase project (`client.permissions.disabledUserSignup: true`). Create accounts manually in [Firebase Authentication → Users → Add user](https://console.firebase.google.com/project/swap-8444c/authentication/users). Existing accounts retain access. Every signed-in account can use the shared library. For another Firebase project, set the same [client signup restriction](https://docs.cloud.google.com/identity-platform/docs/reference/rest/v2/Config#Permissions); hiding the form alone does not restrict the API. The login page and website source remain publicly served by GitHub Pages, while library data and images require authentication.
 
 ### Authenticated Storage downloads and CORS
 
@@ -68,7 +68,7 @@ npx firebase-tools deploy --only firestore:rules,storage --project YOUR_PROJECT_
 3. Optionally set `GEMINI_MODEL` if Google changes the supported Nano Banana Pro model ID. The default is `gemini-3-pro-image`.
 4. In **Settings → Pages**, choose **GitHub Actions** as the source.
 5. Push a commit or run **Publish Swap Studio to GitHub Pages** from Actions. The workflow checks the config, runs unit tests, builds, and deploys `dist/`.
-6. Open the deployed URL. Sign up, connect your personal Gemini key, and test a front/back pair.
+6. Open the deployed URL. Sign in with an account created by the owner, connect your personal Gemini key, and test a front/back pair.
 
 Vite uses relative asset paths, so the app works at `https://USERNAME.github.io/REPOSITORY/` as well as a custom domain. There is no server route fallback requirement.
 

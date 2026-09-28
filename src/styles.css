@@ -183,7 +183,7 @@ select { appearance: none; padding-right: 32px; }
 .gate { min-height: 100vh; padding: 0 5%; display: flex; flex-direction: column; }
 .gate > header { height: 76px; display: flex; align-items: center; }
 .gate-content { width: 100%; max-width: 440px; margin: auto; padding: 35px 0; }
-.gate-card { background: white; border: 1px solid var(--line); border-radius: 12px; padding: 32px; }
+.gate-card { padding: 28px; }
 .gate-card h2, .form-dialog h2 { font-size: 1.5rem; margin-bottom: 12px; }
 .gate-card > p, .form-dialog > p { font-size: .875rem; color: var(--muted); margin-bottom: 24px; }
 .gate-card form .error, .form-dialog form .error, .gate-card form .success { padding: 10px 12px; margin: 10px 0 16px; border-radius: 6px; font-size: .8rem; }

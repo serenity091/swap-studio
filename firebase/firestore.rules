@@ -12,6 +12,11 @@ service cloud.firestore {
         && image.width is int && image.width > 0 && image.width <= 16384
         && image.height is int && image.height > 0 && image.height <= 16384;
     }
+    function sameSwapDimensions(d) {
+      let base = get(/databases/$(database)/documents/records/$(d.identityId)).data.assets;
+      return d.assets.front.width == base.front.width && d.assets.front.height == base.front.height
+        && d.assets.back.width == base.back.width && d.assets.back.height == base.back.height;
+    }
     function validRecord(recordId) {
       let d = request.resource.data;
       return signedIn()
@@ -44,9 +49,10 @@ service cloud.firestore {
             && (!('claspFront' in d.assets) || imageValid(d.assets.claspFront, 'claspFront', recordId))
             && (!('claspBack' in d.assets) || imageValid(d.assets.claspBack, 'claspBack', recordId))
             && !d.assets.keys().hasAll(['claspFront', 'claspBack'])
-            && (!d.promptVersion.matches('.*swap-v4.*') || d.assets.keys().hasAny(['claspFront', 'claspBack']))
+            && (!d.promptVersion.matches('.*swap-v[45].*') || d.assets.keys().hasAny(['claspFront', 'claspBack']))
             && exists(/databases/$(database)/documents/records/$(d.identityId))
-            && get(/databases/$(database)/documents/records/$(d.identityId)).data.kind == 'identity'));
+            && get(/databases/$(database)/documents/records/$(d.identityId)).data.kind == 'identity'
+            && (!d.promptVersion.matches('.*swap-v5.*') || sameSwapDimensions(d))));
     }
     match /records/{recordId} {
       allow read: if signedIn();

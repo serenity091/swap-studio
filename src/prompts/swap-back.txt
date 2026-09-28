@@ -1,7 +1,10 @@
+EDIT THE EXISTING IDENTITY PHOTO
+MODEL_BASE is the photograph to edit, not inspiration for a new model or a new photoshoot. Preserve this exact person and composition. Identity and pose preservation take priority over product styling. Preserve facial structure, eyes, nose, lips, expression, skin texture, hairline and hairstyle, shoulder and arm positions, body shape, subject scale, camera distance, and crop. Do not beautify, substitute a lookalike, repose the model, zoom out, rotate the camera, or extend the canvas. Fit the garment to the existing body and pose.
+
 Transfer the exact bra in BRA_BACK onto MODEL_BASE. This is a product-accurate garment edit for an ecommerce photograph. Return one back-view image in MODEL_BASE's original framing.
 
 REFERENCE PRIORITY
-MODEL_BASE controls the person, pose, body, lighting, and background. BRA_BACK is the authority for every visible rear garment detail. BRA_FRONT clarifies matching fabric and construction. FRONT_RESULT is a secondary color/appearance reference only; if it differs from the real product, follow the mannequin photos. Neither the model base's old clothing nor FRONT_RESULT may redesign the product.
+MODEL_BASE controls the person, pose, body, lighting, and background. BRA_BACK is the authority for every visible rear garment detail. BRA_FRONT clarifies matching fabric and construction. IDENTITY_FRONT is the saved, approved front photograph of the same person. Use it only to reinforce identity; MODEL_BASE alone defines the back-view pose and framing. The product photos alone define the new bra. The identity's old clothing supplies no product design details.
 
 CLASP AND CONSTRUCTION
 Inspect BRA_BACK's fastening before rendering. Reproduce the visible closure as the same manufactured component:

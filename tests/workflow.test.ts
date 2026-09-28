@@ -58,26 +58,29 @@ describe('garment swaps', () => {
     const calls = vi.mocked(generateImage).mock.calls;
     expect(calls[0][0].images.map(i => i.name)).toEqual(['base-f', 'mannequin-f', 'mannequin-b', 'clasp']);
     expect(calls[0][0].imageLabels).toEqual(['MODEL_BASE', 'BRA_FRONT', 'BRA_BACK', 'CLASP_DETAIL']);
-    expect(calls[1][0].images.map(i => i.name)).toEqual(['base-b', 'mannequin-b', 'mannequin-f', 'result-f', 'clasp']);
-    expect(calls[1][0].imageLabels).toEqual(['MODEL_BASE', 'BRA_BACK', 'BRA_FRONT', 'FRONT_RESULT', 'CLASP_DETAIL']);
+    expect(calls[1][0].images.map(i => i.name)).toEqual(['base-b', 'mannequin-b', 'mannequin-f', 'base-f', 'clasp']);
+    expect(calls[1][0].imageLabels).toEqual(['MODEL_BASE', 'BRA_BACK', 'BRA_FRONT', 'IDENTITY_FRONT', 'CLASP_DETAIL']);
     expect(calls[1][0].history).toBeUndefined();
+    expect(calls[0][0].aspectRatio).toBe('3:4');
+    expect(calls[0][0].resolution).toBe('1K');
+    expect(() => swapRecord(result, identity, user)).toThrow('approve');
     expect(result.frontHistory).toBeUndefined();
     expect(calls[1][0].prompt).toContain('crop from BRA_BACK');
-    expect(swapRecord(result, identity, user).assets.claspBack).toEqual(img('clasp'));
-    expect(swapRecord(result, identity, user).identityId).toBe('identity-1');
-    expect(swapRecord(result, identity, user).promptVersion).toBe(SWAP_PROMPT_VERSION);
+    expect(swapRecord(result, identity, user, true).assets.claspBack).toEqual(img('clasp'));
+    expect(swapRecord(result, identity, user, true).identityId).toBe('identity-1');
+    expect(swapRecord(result, identity, user, true).promptVersion).toBe(SWAP_PROMPT_VERSION);
   });
   it('resumes a legacy front without resending its conversation or regenerating it', async () => {
-    vi.mocked(loadImage).mockResolvedValue(img('base-b'));
+    vi.mocked(loadImage).mockResolvedValueOnce(img('base-f')).mockResolvedValueOnce(img('base-b'));
     vi.mocked(generateImage).mockResolvedValue({ image: img('result-b'), history: [] });
     const d = { ...newSwap(), identityId: identity.id, clasp: { image: img('clasp'), view: 'back' as const }, references: { front: img('mannequin-f'), back: img('mannequin-b') }, generated: { front: img('kept-front') }, frontHistory: signedHistory };
     const result = await generateSwap(d, identity, 'key', vi.fn(), vi.fn());
     expect(generateImage).toHaveBeenCalledTimes(1);
     const request = vi.mocked(generateImage).mock.calls[0][0];
     expect(request.history).toBeUndefined();
-    expect(request.images.map(i => i.name)).toEqual(['base-b', 'mannequin-b', 'mannequin-f', 'kept-front', 'clasp']);
+    expect(request.images.map(i => i.name)).toEqual(['base-b', 'mannequin-b', 'mannequin-f', 'base-f', 'clasp']);
     expect(result.generated.front).toBe(d.generated.front);
-    expect(swapRecord(result, identity, user).promptVersion).toBe('workflow-v1-front+swap-v4-back');
+    expect(swapRecord(result, identity, user, true).promptVersion).toBe('workflow-v1-front+swap-v5-back');
   });
   it('blocks missing clasp before loading images or spending API calls, while allowing legacy saves', async () => {
     const d = { ...newSwap(), identityId: identity.id, references: { front: img('f'), back: img('b') } };
@@ -86,12 +89,22 @@ describe('garment swaps', () => {
     expect(loadImage).not.toHaveBeenCalled();
     const completed = { ...d, generated: { front: img('done-f'), back: img('done-b') } };
     expect(await generateSwap(completed, identity, 'key', vi.fn(), vi.fn())).toEqual(completed);
-    expect(swapRecord(completed, identity, user).assets.front.name).toBe('done-f');
+    expect(swapRecord(completed, identity, user, true).assets.front.name).toBe('done-f');
+  });
+  it('rejects a landscape front before requesting the back and retains it for inspection', async () => {
+    vi.mocked(loadImage).mockResolvedValue(img('base'));
+    vi.mocked(generateImage).mockResolvedValue({ image: { ...img('wrong'), width: 2816, height: 1536 }, history: [] });
+    const update = vi.fn();
+    const draft = { ...newSwap(), identityId: identity.id, references: { front: img('f'), back: img('b') }, clasp: { image: img('clasp'), view: 'back' as const } };
+    await expect(generateSwap(draft, identity, 'key', update, vi.fn())).rejects.toThrow('does not match');
+    expect(generateImage).toHaveBeenCalledTimes(1);
+    expect(update.mock.lastCall?.[0].generated.front).toBeUndefined();
+    expect(update.mock.lastCall?.[0].rejected.front.width).toBe(2816);
   });
   it('refuses incomplete pairs and mismatched identities', async () => {
     const d = { ...newSwap(), identityId: 'another-identity' };
     await expect(generateSwap(d, identity, 'key', vi.fn(), vi.fn())).rejects.toThrow('Choose');
-    expect(() => swapRecord(d, identity, user)).toThrow('complete');
+    expect(() => swapRecord(d, identity, user, true)).toThrow('complete');
     expect(generateImage).not.toHaveBeenCalled();
   });
 });

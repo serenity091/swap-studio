@@ -8,7 +8,8 @@ describe('Gemini response handling', () => {
     const mock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: 'output' } }] } }] })));
     vi.stubGlobal('fetch', mock);
     const images = ['base', 'product'].map(data => ({ name: data, data, mimeType: 'image/png', width: 900, height: 1200 }));
-    await generateImage({ ...options, images, imageLabels: ['MODEL_BASE', 'BRA_BACK'] });
+    await generateImage({ ...options, images, imageLabels: ['MODEL_BASE', 'BRA_BACK'], aspectRatio: '3:4' });
+    expect(JSON.parse(mock.mock.calls[0][1].body).generationConfig.imageConfig).toEqual({ imageSize: '2K', aspectRatio: '3:4' });
     expect(JSON.parse(mock.mock.calls[0][1].body).contents).toEqual([{ role: 'user', parts: [
       { text: options.prompt }, { text: 'Reference MODEL_BASE:' }, { inlineData: { mimeType: 'image/png', data: 'base' } },
       { text: 'Reference BRA_BACK:' }, { inlineData: { mimeType: 'image/png', data: 'product' } },

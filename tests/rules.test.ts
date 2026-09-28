@@ -36,11 +36,14 @@ describe.skipIf(!enabled)('Firebase shared-library rules', () => {
   it('validates saved clasp details and keeps legacy swaps compatible', async () => {
     const alice = env.authenticatedContext('alice').firestore();
     await assertSucceeds(setDoc(doc(alice, 'records', 'clasp-model'), record('alice', 'clasp-model')));
-    const swap = { ...record('alice', 'clasp-swap'), kind: 'swap', identityId: 'clasp-model', promptVersion: 'swap-v4-clasp-detail' };
+    const swap = { ...record('alice', 'clasp-swap'), kind: 'swap', identityId: 'clasp-model', promptVersion: 'swap-v5-identity-framing' };
     delete swap.assets.identityFront; delete swap.assets.identityBack;
     await assertFails(setDoc(doc(alice, 'records', 'clasp-swap'), swap));
     swap.assets.claspBack = { ...swap.assets.back, path: 'users/alice/clasp-swap/claspBack' };
     await assertSucceeds(setDoc(doc(alice, 'records', 'clasp-swap'), swap));
+    swap.assets.front.width = 2816;
+    await assertFails(setDoc(doc(alice, 'records', 'clasp-swap'), swap));
+    swap.assets.front.width = 900;
     swap.assets.claspBack.path = 'users/bob/clasp-swap/claspBack';
     await assertFails(setDoc(doc(alice, 'records', 'clasp-swap'), swap));
     delete swap.assets.claspBack;

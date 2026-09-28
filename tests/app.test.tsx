@@ -22,7 +22,7 @@ beforeEach(() => {
   vi.mocked(generateImage).mockReset().mockResolvedValue({ image: img, history: [{ role: 'model', parts: [{ inlineData: { data: 'AA==', mimeType: 'image/png' }, thoughtSignature: 'test-signature' }] }] });
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
-it('requires two explicit approvals, then saves and restores an identity and an automatic swap', async () => {
+it('requires two explicit approvals, then saves and restores an identity and a reviewed swap', async () => {
   const view = render(<App />);
   fireEvent.change(screen.getByPlaceholderText('Enter your Google API key'), { target: { value: 'TEST_ONLY_KEY' } });
   fireEvent.click(screen.getByRole('button', { name: 'Connect & open studio' }));
@@ -50,6 +50,7 @@ it('requires two explicit approvals, then saves and restores an identity and an 
   expect(identityPhoto.getAttribute('aria-pressed')).toBe('true');
   fireEvent.click(identityPhoto);
   expect(screen.queryByLabelText('Saved identity')).toBeNull();
+  expect(screen.queryByLabelText('Output size')).toBeNull();
   fireEvent.change(screen.getByLabelText('Bra name (optional)'), { target: { value: 'Test garment' } });
   for (const side of ['front', 'back']) fireEvent.change(screen.getByLabelText(`Upload ${side} view`, { selector: 'input' }), { target: { files: [file] } });
   await screen.findByRole('button', { name: 'Select clasp from back view' });
@@ -84,6 +85,11 @@ it('requires two explicit approvals, then saves and restores an identity and an 
   expect(vi.mocked(removePhotoBackground).mock.lastCall?.[0].data).toBe('AA==');
   await waitFor(() => expect((screen.getByRole('button', { name: 'Generate bra swap' }) as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(screen.getByRole('button', { name: 'Generate bra swap' }));
+  const saveSwap = await screen.findByRole('button', { name: 'Approve & save swap' });
+  expect((saveSwap as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.queryByRole('heading', { name: 'Test garment' })).toBeNull();
+  fireEvent.click(screen.getByLabelText('I checked both views: identity, pose, framing, and bra are correct.'));
+  fireEvent.click(saveSwap);
   await screen.findByText('Both views saved', { selector: '.saved-status' });
   expect(generateImage).toHaveBeenCalledTimes(6);
   expect(vi.mocked(generateImage).mock.calls[5][0].images[1].data).toBe('WHITE');

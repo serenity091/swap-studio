@@ -32,12 +32,12 @@ export async function validateKey(key: string) {
   if (!response.ok) throw new Error(apiError(response.status, result.error?.message));
 }
 export async function generateImage(options: {
-  key: string; prompt: string; images: ImageAsset[]; imageLabels?: string[]; resolution: Resolution; history?: Content[]; signal?: AbortSignal;
+  key: string; prompt: string; images: ImageAsset[]; imageLabels?: string[]; resolution: Resolution; aspectRatio?: string; history?: Content[]; signal?: AbortSignal;
 }): Promise<Generation> {
   if (!options.key) throw new Error('Connect your Google API key to generate images.');
   const contents = [...(options.history || []), userContent(options.prompt, options.images, options.imageLabels)];
   const body = JSON.stringify({ contents, generationConfig: {
-    responseModalities: ['TEXT', 'IMAGE'], imageConfig: { imageSize: options.resolution },
+    responseModalities: ['TEXT', 'IMAGE'], imageConfig: { imageSize: options.resolution, ...(options.aspectRatio ? { aspectRatio: options.aspectRatio } : {}) },
   } });
   if (new Blob([body]).size > 19 * 1024 * 1024) throw new Error('These references are too large together. Use smaller image files (about 2 MB each) and try again.');
   let response: Response;

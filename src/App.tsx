@@ -7,7 +7,7 @@ import { BackgroundDialog } from './components/BackgroundDialog';
 import { CropDialog } from './components/CropDialog';
 import { imageSrc } from './lib/images';
 import { ImageFrame, ImageModal, StoredThumbnail } from './components/Images';
-import { clearImageCache, saveRecord, watchLibrary } from './lib/library';
+import { clearImageCache, loadImage, saveRecord, watchLibrary } from './lib/library';
 import { localGet, localSet } from './lib/local';
 import { generateIdentity, prepareBases, identityRecord, generateSwap, swapRecord } from './lib/workflow';
 import { completePair, newIdentity, newSwap, type IdentityDraft, type SwapDraft, type ImageAsset, type Pair, type Resolution, type StudioRecord, type StudioUser } from './lib/types';
@@ -64,6 +64,9 @@ function Workspace({ user, apiKey, onKeySettings, logout, initialNotice }: { use
   const [draftError, setDraftError] = useState('');
   const [approvedIdentity, setApprovedIdentity] = useState(false);
   const [approvedBases, setApprovedBases] = useState(false);
+  const [approvedSwap, setApprovedSwap] = useState(false);
+  const [showIdentity, setShowIdentity] = useState(false);
+  const [comparisonBases, setComparisonBases] = useState<Pair>({});
   const [showSource, setShowSource] = useState(false);
   const [zoom, setZoom] = useState<{ image: ImageAsset; label: string }>();
   const [crop, setCrop] = useState<{ view: 'front' | 'back'; detail: boolean }>();
@@ -87,10 +90,16 @@ function Workspace({ user, apiKey, onKeySettings, logout, initialNotice }: { use
   const identities = records.filter(r => r.kind === 'identity');
   const swaps = records.filter(r => r.kind === 'swap');
   const selected = identities.find(r => r.id === swap.identityId);
+  useEffect(() => {
+    let active = true; setComparisonBases({});
+    if (selected) void Promise.all([loadImage(selected.assets.front), loadImage(selected.assets.back)]).then(([front, back]) => { if (active) setComparisonBases({ front, back }); }).catch(() => { if (active) setError('Could not load identity images for comparison.'); });
+    return () => { active = false; };
+  }, [selected?.id]);
+  useEffect(() => { setApprovedSwap(false); }, [swap.generated.front, swap.generated.back, swap.id]);
   async function run(action: (signal: AbortSignal) => Promise<unknown>, requiresKey = true) {
     if (saving.current) return;
     if (requiresKey && !apiKey) { onKeySettings(); return; }
-    saving.current = true; controller.current = new AbortController(); setError(''); setNotice(''); setShowSource(false); setBusy('Preparing…');
+    saving.current = true; controller.current = new AbortController(); setError(''); setNotice(''); setShowSource(false); setShowIdentity(false); setBusy('Preparing…');
     try { await action(controller.current.signal); }
     catch (e) { setError((e as Error).message || 'Something went wrong. Your completed images are kept.'); }
     finally { saving.current = false; controller.current = undefined; setBusy(''); }
@@ -118,15 +127,25 @@ function Workspace({ user, apiKey, onKeySettings, logout, initialNotice }: { use
   }
   async function performSwap(signal: AbortSignal) {
     if (!selected) throw new Error('Choose an identity from the library first.');
-    const result = await generateSwap(swap, selected, apiKey, setSwap, setBusy, signal);
-    setBusy('Saving the generated pair to the shared library…');
-    try { await saveRecord(swapRecord(result, selected, user)); }
-    catch { throw new Error('The images were generated, but could not be saved. Check your connection and Firebase setup, then click Retry saving. No regeneration is needed.'); }
-    setSwap({ ...result, savedId: result.id, frontHistory: undefined });
-    setNotice(isPreview ? 'Swap saved in this browser’s preview library.' : 'Both views are saved to the shared library.');
+    await generateSwap(swap, selected, apiKey, setSwap, setBusy, signal);
+    setNotice('Review both views against the saved identity before saving.');
+  }
+  async function saveSwap() {
+    if (!selected) return;
+    await run(async () => {
+      setBusy('Saving the approved pair…');
+      await saveRecord(swapRecord(swap, selected, user, approvedSwap));
+      setSwap(s => ({ ...s, savedId: s.id, frontHistory: undefined }));
+      setNotice('Both approved views are saved to the shared library.');
+    }, false);
+  }
+  function retrySwap() {
+    setSwap(s => ({ ...newSwap(), identityId: s.identityId, name: s.name, references: s.references, originals: s.originals, beforeBackground: s.beforeBackground, clasp: s.clasp }));
+    setApprovedSwap(false); setShowSource(false); setShowIdentity(false); setError(''); setNotice('Ready to generate again using the same photos.');
   }
   const identityPair = draft.step === 0 || showSource ? (draft.step === 2 || draft.step === 3 ? draft.generated : draft.references) : draft.step === 1 ? draft.generated : draft.bases;
-  const swapPair = showSource || !swap.generated.front ? swap.references : swap.generated;
+  const swapHasOutput = Boolean(swap.generated.front || swap.rejected?.front || swap.rejected?.back);
+  const swapPair = showIdentity ? comparisonBases : showSource || !swapHasOutput ? swap.references : { ...swap.generated, ...Object.fromEntries(Object.entries(swap.rejected || {}).filter(([, value]) => value)) };
   if (!hydrated) return <div className="loading-screen"><Brand /><LoaderCircle className="spin" /><p>Restoring your workspace…</p></div>;
   return <div className="studio">
     {isPreview && <div className="preview-banner">LOCAL PREVIEW <span>Accounts and shared storage connect after Firebase setup. Preview saves stay in this browser.</span></div>}
@@ -159,15 +178,17 @@ function Workspace({ user, apiKey, onKeySettings, logout, initialNotice }: { use
         </section>
         <div className="workspace-grid swap-grid"><aside className="control-panel"><h2>{selected?.name || 'Selected model'}</h2>
           {selected ? <div className="identity-mini-pair"><StoredThumbnail asset={selected.assets.front} label={`${selected.name} front base`} onOpen={image => setZoom({ image, label: `${selected.name} · Front base` })} /><StoredThumbnail asset={selected.assets.back} label={`${selected.name} back base`} onOpen={image => setZoom({ image, label: `${selected.name} · Back base` })} /></div> : <div className="no-identity"><CircleUserRound size={25} /><p>{identities.length ? 'Click a model photo above.' : 'Create and approve an identity first.'}</p>{!identities.length && <button className="text-button" onClick={() => changeTab('identity')}><ArrowLeft size={14} />Create an identity</button>}</div>}
-          <fieldset disabled={Boolean(busy) || Boolean(swap.generated.front)}><label className="field-label">Bra name (optional)<input maxLength={80} placeholder="e.g. Red lace bra" value={swap.name} onChange={e => setSwap(s => ({ ...s, name: e.target.value }))} /></label><ResolutionField value={swap.resolution} onChange={resolution => setSwap(s => ({ ...s, resolution }))} /></fieldset>
-          {!swap.savedId && <button className="primary full" disabled={Boolean(busy) || !selected || !completePair(swap.references) || (!completePair(swap.generated) && !swap.clasp)} onClick={() => void run(performSwap, !completePair(swap.generated))}>{busy ? <><LoaderCircle className="spin" size={17} />{busy.startsWith('Saving') ? 'Saving…' : 'Working…'}</> : completePair(swap.generated) ? <><RefreshCw size={17} />Retry saving</> : <><Sparkles size={17} />{swap.generated.front ? 'Complete back view' : 'Generate bra swap'}<ArrowRight size={17} /></>}</button>}
+          <fieldset disabled={Boolean(busy) || Boolean(swap.generated.front)}><label className="field-label">Bra name (optional)<input maxLength={80} placeholder="e.g. Red lace bra" value={swap.name} onChange={e => setSwap(s => ({ ...s, name: e.target.value }))} /></label><p className="save-note">Output dimensions match the identity.{selected && <><br />Front: {selected.assets.front.width} × {selected.assets.front.height}<br />Back: {selected.assets.back.width} × {selected.assets.back.height}</>}</p></fieldset>
+          {!swap.savedId && !completePair(swap.generated) && <button className="primary full" disabled={Boolean(busy) || !selected || !completePair(swap.references) || !swap.clasp} onClick={() => void run(performSwap)}>{busy ? <><LoaderCircle className="spin" size={17} />Working…</> : <><Sparkles size={17} />{swap.generated.front ? 'Complete back view' : 'Generate bra swap'}<ArrowRight size={17} /></>}</button>}
+          {!swap.savedId && completePair(swap.generated) && <><label className="approval"><input type="checkbox" checked={approvedSwap} onChange={e => setApprovedSwap(e.target.checked)} disabled={Boolean(busy)} /><span>I checked both views: identity, pose, framing, and bra are correct.</span></label><button className="primary full" disabled={!approvedSwap || Boolean(busy)} onClick={() => void saveSwap()}><Check size={17} />Approve & save swap</button></>}
+          {swapHasOutput && <button className="secondary full" disabled={Boolean(busy)} onClick={retrySwap}>Try again with these photos</button>}
           {!swap.savedId && !completePair(swap.generated) && !swap.clasp && <p className="save-note">Select a clasp detail below before generating.</p>}
           {error && <div className="notice error swap-error" role="alert"><span>{error}</span><button aria-label="Dismiss error" className="icon-button" onClick={() => setError('')}><X size={18} /></button></div>}
           {busy && <p className="save-note" role="status">{busy}</p>}
           {swap.savedId && <div className="saved-status"><CheckCircle2 size={20} />Both views saved</div>}
-          <p className="save-note">Results save automatically.</p><PromptDetails kind="swap" />
-        </aside><div className="canvas-panel"><div className="canvas-header"><div><span className="eyebrow">{swap.generated.front && !showSource ? 'Result' : '2. Upload your bra'}</span><span className="canvas-subtitle">Front & back</span></div>{swap.generated.front && <ViewToggle value={showSource} onChange={setShowSource} sourceLabel="References" />}</div>
-          <div className="image-pair">{(['front', 'back'] as const).map(view => <ImageFrame key={view} label={`${view === 'front' ? 'Front' : 'Back'} view`} image={swapPair[view]} hint={!swap.generated.front || showSource ? `Bra on mannequin · ${view}` : selected?.name} onUpload={!swap.generated.front ? image => setSwap(s => ({ ...s, references: { ...s.references, [view]: image }, originals: { ...s.originals, [view]: image }, beforeBackground: { ...s.beforeBackground, [view]: undefined }, clasp: s.clasp?.view === view ? undefined : s.clasp })) : undefined} onCrop={!swap.generated.front && swap.references[view] ? () => setCrop({ view, detail: false }) : undefined} onClasp={!completePair(swap.generated) && (!swap.generated.front || showSource) && swap.references[view] ? () => setCrop({ view, detail: true }) : undefined} onRemoveBackground={!swap.generated.front && swap.references[view] ? () => setBackgroundView(view) : undefined} onUndoBackground={!swap.generated.front && swap.beforeBackground?.[view] ? () => setSwap(s => ({ ...s, references: { ...s.references, [view]: s.beforeBackground?.[view] }, beforeBackground: { ...s.beforeBackground, [view]: undefined } })) : undefined} onRestore={!swap.generated.front && swap.originals?.[view] && swap.originals[view] !== swap.references[view] ? () => setSwap(s => ({ ...s, references: { ...s.references, [view]: s.originals?.[view] }, beforeBackground: { ...s.beforeBackground, [view]: undefined } })) : undefined} onError={setError} disabled={Boolean(busy)} loading={Boolean(busy) && !showSource && !swapPair[view]} />)}</div>
+          <p className="save-note">Review both views before saving.</p><PromptDetails kind="swap" />
+        </aside><div className="canvas-panel"><div className="canvas-header"><div><span className="eyebrow">{showIdentity ? 'Saved identity' : swapHasOutput && !showSource ? (swap.savedId ? 'Saved result' : 'Result · review required') : '2. Upload your bra'}</span><span className="canvas-subtitle">Front & back</span></div>{swapHasOutput && <div className="swap-compare-controls"><button className="text-button" aria-pressed={showIdentity} disabled={!completePair(comparisonBases)} onClick={() => { setShowIdentity(v => !v); setShowSource(false); }}>Compare identity</button><ViewToggle inactive={showIdentity} value={showSource} onChange={value => { setShowSource(value); setShowIdentity(false); }} sourceLabel="References" /></div>}</div>
+          <div className="image-pair">{(['front', 'back'] as const).map(view => <ImageFrame key={view} label={`${view === 'front' ? 'Front' : 'Back'} view`} image={swapPair[view]} hint={showIdentity ? 'Saved identity · unchanged' : !showSource && swap.rejected?.[view] ? 'Rejected framing · not saved' : !swapHasOutput || showSource ? `Bra on mannequin · ${view}` : selected?.name} onUpload={!swapHasOutput ? image => setSwap(s => ({ ...s, references: { ...s.references, [view]: image }, originals: { ...s.originals, [view]: image }, beforeBackground: { ...s.beforeBackground, [view]: undefined }, clasp: s.clasp?.view === view ? undefined : s.clasp })) : undefined} onCrop={!swapHasOutput && swap.references[view] ? () => setCrop({ view, detail: false }) : undefined} onClasp={!completePair(swap.generated) && (!swap.generated.front || showSource) && swap.references[view] ? () => setCrop({ view, detail: true }) : undefined} onRemoveBackground={!swapHasOutput && swap.references[view] ? () => setBackgroundView(view) : undefined} onUndoBackground={!swapHasOutput && swap.beforeBackground?.[view] ? () => setSwap(s => ({ ...s, references: { ...s.references, [view]: s.beforeBackground?.[view] }, beforeBackground: { ...s.beforeBackground, [view]: undefined } })) : undefined} onRestore={!swapHasOutput && swap.originals?.[view] && swap.originals[view] !== swap.references[view] ? () => setSwap(s => ({ ...s, references: { ...s.references, [view]: s.originals?.[view] }, beforeBackground: { ...s.beforeBackground, [view]: undefined } })) : undefined} onError={setError} disabled={Boolean(busy)} loading={Boolean(busy) && !showSource && !swapPair[view]} />)}</div>
           <div className="clasp-detail"><div><h3>3. Clasp detail <span className="small muted">Required</span></h3><p className="small muted">Select the whole closure from the front or back photo, including a little band on both sides.</p></div>{swap.clasp && <button className="clasp-preview" aria-label="Enlarge clasp detail" onClick={() => setZoom({ image: swap.clasp!.image, label: `Clasp detail · ${swap.clasp!.view}` })}><img src={imageSrc(swap.clasp.image)} alt={`Clasp detail from ${swap.clasp.view} photo`} /></button>}</div>
           <CanvasStatus busy={busy} canCancel={!busy.startsWith('Saving')} onCancel={() => controller.current?.abort()} label={swap.savedId ? 'Both views are saved. Download or start a new garment.' : 'Use clear mannequin photos of the same bra from both sides.'} />
         </div></div><Library title="Swap library" subtitle="Your generated garment photographs, saved together." records={swaps} loading={libraryLoading} onOpen={(image, label) => setZoom({ image, label })} disabled={Boolean(busy)} empty="Your completed bra swaps will appear here." />
@@ -181,8 +202,8 @@ function Workspace({ user, apiKey, onKeySettings, logout, initialNotice }: { use
 function ResolutionField({ value, onChange, disabled }: { value: Resolution; onChange: (v: Resolution) => void; disabled?: boolean }) {
   return <label className="field-label">Output size<div className="select-wrap"><select value={value} onChange={e => onChange(e.target.value as Resolution)} disabled={disabled}><option value="1K">1K · Standard</option><option value="2K">2K · High detail</option><option value="4K">4K · Maximum detail</option></select><ChevronDown size={16} /></div></label>;
 }
-function ViewToggle({ value, onChange, sourceLabel }: { value: boolean; onChange: (v: boolean) => void; sourceLabel: string }) {
-  return <div className="view-toggle" aria-label="Compare images"><button aria-pressed={!value} className={!value ? 'selected' : ''} onClick={() => onChange(false)}>Generated</button><button aria-pressed={value} className={value ? 'selected' : ''} onClick={() => onChange(true)}>{sourceLabel}</button></div>;
+function ViewToggle({ value, onChange, sourceLabel, inactive = false }: { value: boolean; onChange: (v: boolean) => void; sourceLabel: string; inactive?: boolean }) {
+  return <div className="view-toggle" aria-label="Compare images"><button aria-pressed={!value && !inactive} className={!value && !inactive ? 'selected' : ''} onClick={() => onChange(false)}>Generated</button><button aria-pressed={value && !inactive} className={value && !inactive ? 'selected' : ''} onClick={() => onChange(true)}>{sourceLabel}</button></div>;
 }
 function CanvasStatus({ busy, label, onCancel, canCancel }: { busy: string; label: string; onCancel: () => void; canCancel: boolean }) {
   return <div className={`canvas-status ${busy ? 'working' : ''}`} role="status" aria-live="polite">{busy ? <><LoaderCircle className="spin" size={17} /><span>{busy}<small>This can take a few minutes. Keep this tab open.</small></span>{canCancel && <button className="text-button" onClick={onCancel}>Stop</button>}</> : <><span className="status-dot" /><span>{label}</span></>}</div>;

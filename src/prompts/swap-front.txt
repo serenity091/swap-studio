@@ -1,3 +1,6 @@
+EDIT THE EXISTING IDENTITY PHOTO
+MODEL_BASE is the photograph to edit, not inspiration for a new model or a new photoshoot. Preserve this exact person and composition. Identity and pose preservation take priority over product styling. Preserve facial structure, eyes, nose, lips, expression, skin texture, hairline and hairstyle, shoulder and arm positions, body shape, subject scale, camera distance, and crop. Do not beautify, substitute a lookalike, repose the model, zoom out, rotate the camera, or extend the canvas. Fit the garment to the existing body and pose.
+
 Replace only the bra in MODEL_BASE with the exact product in BRA_FRONT. This is a product-accurate garment edit for an ecommerce photograph. Return one front-view image in MODEL_BASE's original framing.
 
 REFERENCE PRIORITY

@@ -50,7 +50,9 @@ export function loadImage(image: StoredImage): Promise<ImageAsset> {
       if (!storage) throw new Error('Firebase is not configured.');
       // Authenticated blob requests honor Storage rules; no public download-token URLs are stored.
       const blob = await getBlob(ref(storage, image.path), 30 * 1024 * 1024);
-      return { ...await readStoredBlob(blob), name: image.name };
+      // Firebase's size-limited getBlob uses Blob.slice(), which drops the MIME type.
+      const typedBlob = blob.type ? blob : blob.slice(0, blob.size, image.mimeType);
+      return { ...await readStoredBlob(typedBlob), name: image.name };
     })();
     cache.set(image.path, pending);
     pending.catch(() => cache.delete(image.path));

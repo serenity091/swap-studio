@@ -12,7 +12,7 @@ const img: ImageAsset = { name: 'test-output', data: 'AA==', mimeType: 'image/pn
 beforeEach(() => {
   const values = new Map<string, string>();
   vi.stubGlobal('localStorage', { getItem: (k: string) => values.get(k) ?? null, setItem: (k: string, v: string) => values.set(k, v), removeItem: (k: string) => values.delete(k), clear: () => values.clear() });
-  vi.stubGlobal('IntersectionObserver', class { observe() {} disconnect() {} unobserve() {} });
+  vi.stubGlobal('IntersectionObserver', class { callback: (entries: { isIntersecting: boolean }[]) => void; constructor(callback: (entries: { isIntersecting: boolean }[]) => void) { this.callback = callback; } observe() { this.callback([{ isIntersecting: true }]); } disconnect() {} unobserve() {} });
   vi.stubGlobal('scrollTo', vi.fn());
   vi.mocked(generateImage).mockReset().mockResolvedValue({ image: img, history: [{ role: 'model', parts: [{ inlineData: { data: 'AA==', mimeType: 'image/png' }, thoughtSignature: 'test-signature' }] }] });
 });
@@ -21,7 +21,7 @@ it('requires two explicit approvals, then saves and restores an identity and an 
   const view = render(<App />);
   fireEvent.change(screen.getByPlaceholderText('Enter your Google API key'), { target: { value: 'TEST_ONLY_KEY' } });
   fireEvent.click(screen.getByRole('button', { name: 'Connect & open studio' }));
-  await screen.findByRole('heading', { name: 'Create your model identity.' });
+  await screen.findByRole('heading', { name: 'Create identity' });
   fireEvent.change(screen.getByLabelText('Identity name'), { target: { value: 'Test identity' } });
   const file = new File(['test'], 'test.png', { type: 'image/png' });
   for (const side of ['front', 'back']) fireEvent.change(screen.getByLabelText(`Upload ${side} view`, { selector: 'input' }), { target: { files: [file] } });
@@ -40,8 +40,12 @@ it('requires two explicit approvals, then saves and restores an identity and an 
   await screen.findByText('Identity saved', { selector: '.saved-status' });
   expect(screen.getByRole('heading', { name: 'Test identity' })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Use in a bra swap', exact: true }));
-  await screen.findByRole('heading', { name: 'Same identity. A new bra.' });
-  fireEvent.change(screen.getByLabelText('Garment / collection name'), { target: { value: 'Test garment' } });
+  await screen.findByRole('heading', { name: 'Bra swap' });
+  const identityPhoto = await screen.findByRole('button', { name: 'Select Test identity' });
+  expect(identityPhoto.getAttribute('aria-pressed')).toBe('true');
+  fireEvent.click(identityPhoto);
+  expect(screen.queryByLabelText('Saved identity')).toBeNull();
+  fireEvent.change(screen.getByLabelText('Bra name (optional)'), { target: { value: 'Test garment' } });
   for (const side of ['front', 'back']) fireEvent.change(screen.getByLabelText(`Upload ${side} view`, { selector: 'input' }), { target: { files: [file] } });
   await waitFor(() => expect((screen.getByRole('button', { name: 'Generate bra swap' }) as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(screen.getByRole('button', { name: 'Generate bra swap' }));

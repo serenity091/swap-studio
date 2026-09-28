@@ -4,6 +4,18 @@ import { generateImage, extractImage, validateKey } from '../src/lib/gemini';
 const options = { key: 'TEST_ONLY_KEY', prompt: 'Generate a test image', images: [], resolution: '2K' as const };
 afterEach(() => vi.unstubAllGlobals());
 describe('Gemini response handling', () => {
+  it('places each role label directly before its matching image in the API request', async () => {
+    const mock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: 'output' } }] } }] })));
+    vi.stubGlobal('fetch', mock);
+    const images = ['base', 'product'].map(data => ({ name: data, data, mimeType: 'image/png', width: 900, height: 1200 }));
+    await generateImage({ ...options, images, imageLabels: ['MODEL_BASE', 'BRA_BACK'] });
+    expect(JSON.parse(mock.mock.calls[0][1].body).contents).toEqual([{ role: 'user', parts: [
+      { text: options.prompt }, { text: 'Reference MODEL_BASE:' }, { inlineData: { mimeType: 'image/png', data: 'base' } },
+      { text: 'Reference BRA_BACK:' }, { inlineData: { mimeType: 'image/png', data: 'product' } },
+    ] }]);
+    await expect(generateImage({ ...options, images, imageLabels: ['MODEL_BASE'] })).rejects.toThrow('Each reference');
+    expect(mock).toHaveBeenCalledTimes(1);
+  });
   it('ignores thought images and carries opaque signatures unchanged', async () => {
     const parts = [{ thought: true, inlineData: { mimeType: 'image/png', data: 'draft' } }, { inlineData: { mimeType: 'image/png', data: 'final' }, thoughtSignature: 'signature-123' }];
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ candidates: [{ content: { role: 'model', parts } }] })));

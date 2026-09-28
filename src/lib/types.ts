@@ -20,7 +20,7 @@ export type IdentityDraft = {
 };
 export type SwapDraft = {
   id: string; identityId: string; name: string; references: Pair; generated: Pair;
-  frontHistory?: Content[]; resolution: Resolution; savedId?: string;
+  frontHistory?: Content[]; resolution: Resolution; savedId?: string; promptVersion?: string;
 };
 export function newIdentity(): IdentityDraft {
   return { id: crypto.randomUUID(), name: '', references: {}, generated: {}, bases: {}, step: 0, resolution: '2K', identityApproved: false };

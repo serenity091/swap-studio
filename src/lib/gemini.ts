@@ -2,9 +2,15 @@ import type { Content, Generation, ImageAsset, Part, Resolution } from './types'
 import { getDimensions } from './images';
 export const MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-3-pro-image';
 const API = 'https://generativelanguage.googleapis.com/v1beta';
-export const userContent = (prompt: string, images: ImageAsset[]): Content => ({
-  role: 'user', parts: [{ text: prompt }, ...images.map(image => ({ inlineData: { mimeType: image.mimeType, data: image.data } }))],
-});
+export function userContent(prompt: string, images: ImageAsset[], imageLabels?: string[]): Content {
+  if (imageLabels && (imageLabels.length !== images.length || imageLabels.some(label => !label.trim()))) throw new Error('Each reference image must have a label.');
+  return {
+    role: 'user', parts: [{ text: prompt }, ...images.flatMap((image, index): Part[] => [
+      ...(imageLabels ? [{ text: `Reference ${imageLabels[index]}:` }] : []),
+      { inlineData: { mimeType: image.mimeType, data: image.data } },
+    ])],
+  };
+}
 export function extractImage(parts: Part[]) {
   return [...parts].reverse().find(p => !p.thought && p.inlineData?.mimeType.startsWith('image/'))?.inlineData;
 }
@@ -25,10 +31,10 @@ export async function validateKey(key: string) {
   if (!response.ok) throw new Error(apiError(response.status, result.error?.message));
 }
 export async function generateImage(options: {
-  key: string; prompt: string; images: ImageAsset[]; resolution: Resolution; history?: Content[]; signal?: AbortSignal;
+  key: string; prompt: string; images: ImageAsset[]; imageLabels?: string[]; resolution: Resolution; history?: Content[]; signal?: AbortSignal;
 }): Promise<Generation> {
   if (!options.key) throw new Error('Connect your Google API key to generate images.');
-  const contents = [...(options.history || []), userContent(options.prompt, options.images)];
+  const contents = [...(options.history || []), userContent(options.prompt, options.images, options.imageLabels)];
   const body = JSON.stringify({ contents, generationConfig: {
     responseModalities: ['TEXT', 'IMAGE'], imageConfig: { imageSize: options.resolution },
   } });

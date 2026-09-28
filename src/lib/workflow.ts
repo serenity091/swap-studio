@@ -1,4 +1,4 @@
-import { PROMPTS, PROMPT_VERSION } from '../prompts';
+import { PROMPTS, PROMPT_VERSION, SWAP_PROMPT_VERSION } from '../prompts';
 import { generateImage, MODEL } from './gemini';
 import { completePair, type IdentityDraft, type SwapDraft, type StudioRecord, type StudioUser, type SaveInput } from './types';
 import { loadImage } from './library';
@@ -48,21 +48,22 @@ export async function generateSwap(draft: SwapDraft, identity: StudioRecord, key
     progress('Loading the approved identity…');
     const base = await loadImage(identity.assets.front);
     progress('Fitting the bra to the front view…');
-    const result = await generateImage({ key, prompt: PROMPTS.swapFront, images: [base, draft.references.front, draft.references.back], resolution: draft.resolution, signal });
-    next = { ...next, generated: { front: result.image }, frontHistory: result.history }; update(next);
+    const result = await generateImage({ key, prompt: PROMPTS.swapFront, images: [base, draft.references.front, draft.references.back], imageLabels: ['MODEL_BASE', 'BRA_FRONT', 'BRA_BACK'], resolution: draft.resolution, signal });
+    next = { ...next, generated: { front: result.image }, frontHistory: undefined, promptVersion: SWAP_PROMPT_VERSION }; update(next);
   }
   if (!next.generated.back) {
-    if (!next.frontHistory) throw new Error('The front-view context is missing. Start a new swap.');
     progress('Loading the back-view identity…');
     const base = await loadImage(identity.assets.back);
     progress('Fitting the back and matching the front…');
-    const result = await generateImage({ key, prompt: PROMPTS.swapBack, images: [base, draft.references.back, draft.references.front], history: next.frontHistory, resolution: draft.resolution, signal });
-    next = { ...next, generated: { ...next.generated, back: result.image } }; update(next);
+    // A fresh edit has one unambiguous base and avoids resending the entire front conversation.
+    // The generated front remains a visual reference for the garment's appearance only.
+    const result = await generateImage({ key, prompt: PROMPTS.swapBack, images: [base, draft.references.back, draft.references.front, next.generated.front!], imageLabels: ['MODEL_BASE', 'BRA_BACK', 'BRA_FRONT', 'FRONT_RESULT'], resolution: draft.resolution, signal });
+    next = { ...next, generated: { ...next.generated, back: result.image }, frontHistory: undefined, promptVersion: next.promptVersion || 'workflow-v1-front+swap-v2-back' }; update(next);
   }
   return next;
 }
 export function swapRecord(d: SwapDraft, identity: StudioRecord, user: StudioUser): SaveInput {
   if (!completePair(d.generated) || !completePair(d.references)) throw new Error('A complete front and back pair is required before saving.');
   if (identity.kind !== 'identity' || identity.id !== d.identityId) throw new Error('The selected identity does not match this swap.');
-  return { id: d.id, kind: 'swap', name: d.name.trim() || `${identity.name} · Bra swap`, ownerId: user.uid, ownerName: user.email?.split('@')[0] || 'Studio member', createdAt: Date.now(), model: MODEL, resolution: d.resolution, promptVersion: PROMPT_VERSION, identityId: identity.id, identityName: identity.name, assets: { front: d.generated.front, back: d.generated.back, referenceFront: d.references.front, referenceBack: d.references.back } };
+  return { id: d.id, kind: 'swap', name: d.name.trim() || `${identity.name} · Bra swap`, ownerId: user.uid, ownerName: user.email?.split('@')[0] || 'Studio member', createdAt: Date.now(), model: MODEL, resolution: d.resolution, promptVersion: d.promptVersion || PROMPT_VERSION, identityId: identity.id, identityName: identity.name, assets: { front: d.generated.front, back: d.generated.back, referenceFront: d.references.front, referenceBack: d.references.back } };
 }

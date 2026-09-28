@@ -33,6 +33,22 @@ describe.skipIf(!enabled)('Firebase shared-library rules', () => {
     badPath.assets.front.path = 'users/bob/other/front';
     await assertFails(setDoc(doc(alice, 'records', 'bad-path'), badPath));
   });
+  it('validates saved clasp details and keeps legacy swaps compatible', async () => {
+    const alice = env.authenticatedContext('alice').firestore();
+    await assertSucceeds(setDoc(doc(alice, 'records', 'clasp-model'), record('alice', 'clasp-model')));
+    const swap = { ...record('alice', 'clasp-swap'), kind: 'swap', identityId: 'clasp-model', promptVersion: 'swap-v4-clasp-detail' };
+    delete swap.assets.identityFront; delete swap.assets.identityBack;
+    await assertFails(setDoc(doc(alice, 'records', 'clasp-swap'), swap));
+    swap.assets.claspBack = { ...swap.assets.back, path: 'users/alice/clasp-swap/claspBack' };
+    await assertSucceeds(setDoc(doc(alice, 'records', 'clasp-swap'), swap));
+    swap.assets.claspBack.path = 'users/bob/clasp-swap/claspBack';
+    await assertFails(setDoc(doc(alice, 'records', 'clasp-swap'), swap));
+    delete swap.assets.claspBack;
+    await assertSucceeds(setDoc(doc(alice, 'records', 'clasp-swap'), { ...swap, promptVersion: 'swap-v3-product-fidelity' }));
+    const bytes = new Uint8Array([137, 80, 78, 71]);
+    await assertSucceeds(uploadBytes(ref(env.authenticatedContext('alice').storage(), 'users/alice/clasp-swap/claspBack'), bytes, { contentType: 'image/png' }));
+    await assertFails(uploadBytes(ref(env.authenticatedContext('bob').storage(), 'users/alice/clasp-swap/claspBack'), bytes, { contentType: 'image/png' }));
+  });
   it('limits image reads to members and image writes to the uploader', async () => {
     const alice = env.authenticatedContext('alice').storage();
     const bob = env.authenticatedContext('bob').storage();

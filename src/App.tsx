@@ -3,6 +3,8 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, CircleUserRound, FolderOpen, KeyRound, LoaderCircle, LogOut, Plus, RefreshCw, Shirt, Sparkles, X } from 'lucide-react';
 import { auth, configError, isPreview } from './lib/firebase';
 import { AuthGate, Brand, GateLayout, KeyForm, SetupGate } from './components/Gates';
+import { CropDialog } from './components/CropDialog';
+import { imageSrc } from './lib/images';
 import { ImageFrame, ImageModal, StoredThumbnail } from './components/Images';
 import { clearImageCache, saveRecord, watchLibrary } from './lib/library';
 import { localGet, localSet } from './lib/local';
@@ -63,6 +65,8 @@ function Workspace({ user, apiKey, onKeySettings, logout, initialNotice }: { use
   const [approvedBases, setApprovedBases] = useState(false);
   const [showSource, setShowSource] = useState(false);
   const [zoom, setZoom] = useState<{ image: ImageAsset; label: string }>();
+  const [crop, setCrop] = useState<{ view: 'front' | 'back'; detail: boolean }>();
+  const cropSource = crop && (swap.originals?.[crop.view] || swap.references[crop.view]);
   const controller = useRef<AbortController | undefined>(undefined);
   const saving = useRef(false);
   const draftKey = `drafts:${user.uid}`;
@@ -153,17 +157,20 @@ function Workspace({ user, apiKey, onKeySettings, logout, initialNotice }: { use
         <div className="workspace-grid swap-grid"><aside className="control-panel"><h2>{selected?.name || 'Selected model'}</h2>
           {selected ? <div className="identity-mini-pair"><StoredThumbnail asset={selected.assets.front} label={`${selected.name} front base`} onOpen={image => setZoom({ image, label: `${selected.name} · Front base` })} /><StoredThumbnail asset={selected.assets.back} label={`${selected.name} back base`} onOpen={image => setZoom({ image, label: `${selected.name} · Back base` })} /></div> : <div className="no-identity"><CircleUserRound size={25} /><p>{identities.length ? 'Click a model photo above.' : 'Create and approve an identity first.'}</p>{!identities.length && <button className="text-button" onClick={() => changeTab('identity')}><ArrowLeft size={14} />Create an identity</button>}</div>}
           <fieldset disabled={Boolean(busy) || Boolean(swap.generated.front)}><label className="field-label">Bra name (optional)<input maxLength={80} placeholder="e.g. Red lace bra" value={swap.name} onChange={e => setSwap(s => ({ ...s, name: e.target.value }))} /></label><ResolutionField value={swap.resolution} onChange={resolution => setSwap(s => ({ ...s, resolution }))} /></fieldset>
-          {!swap.savedId && <button className="primary full" disabled={Boolean(busy) || !selected || !completePair(swap.references)} onClick={() => void run(performSwap, !completePair(swap.generated))}>{busy ? <><LoaderCircle className="spin" size={17} />{busy.startsWith('Saving') ? 'Saving…' : 'Working…'}</> : completePair(swap.generated) ? <><RefreshCw size={17} />Retry saving</> : <><Sparkles size={17} />{swap.generated.front ? 'Complete back view' : 'Generate bra swap'}<ArrowRight size={17} /></>}</button>}
+          {!swap.savedId && <button className="primary full" disabled={Boolean(busy) || !selected || !completePair(swap.references) || (!completePair(swap.generated) && !swap.clasp)} onClick={() => void run(performSwap, !completePair(swap.generated))}>{busy ? <><LoaderCircle className="spin" size={17} />{busy.startsWith('Saving') ? 'Saving…' : 'Working…'}</> : completePair(swap.generated) ? <><RefreshCw size={17} />Retry saving</> : <><Sparkles size={17} />{swap.generated.front ? 'Complete back view' : 'Generate bra swap'}<ArrowRight size={17} /></>}</button>}
+          {!swap.savedId && !completePair(swap.generated) && !swap.clasp && <p className="save-note">Select a clasp detail below before generating.</p>}
           {error && <div className="notice error swap-error" role="alert"><span>{error}</span><button aria-label="Dismiss error" className="icon-button" onClick={() => setError('')}><X size={18} /></button></div>}
           {busy && <p className="save-note" role="status">{busy}</p>}
           {swap.savedId && <div className="saved-status"><CheckCircle2 size={20} />Both views saved</div>}
           <p className="save-note">Results save automatically.</p><PromptDetails kind="swap" />
         </aside><div className="canvas-panel"><div className="canvas-header"><div><span className="eyebrow">{swap.generated.front && !showSource ? 'Result' : '2. Upload your bra'}</span><span className="canvas-subtitle">Front & back</span></div>{swap.generated.front && <ViewToggle value={showSource} onChange={setShowSource} sourceLabel="References" />}</div>
-          <div className="image-pair">{(['front', 'back'] as const).map(view => <ImageFrame key={view} label={`${view === 'front' ? 'Front' : 'Back'} view`} image={swapPair[view]} hint={!swap.generated.front || showSource ? `Bra on mannequin · ${view}` : selected?.name} onUpload={!swap.generated.front ? image => setSwap(s => ({ ...s, references: { ...s.references, [view]: image } })) : undefined} onError={setError} disabled={Boolean(busy)} loading={Boolean(busy) && !showSource && !swapPair[view]} />)}</div>
+          <div className="image-pair">{(['front', 'back'] as const).map(view => <ImageFrame key={view} label={`${view === 'front' ? 'Front' : 'Back'} view`} image={swapPair[view]} hint={!swap.generated.front || showSource ? `Bra on mannequin · ${view}` : selected?.name} onUpload={!swap.generated.front ? image => setSwap(s => ({ ...s, references: { ...s.references, [view]: image }, originals: { ...s.originals, [view]: image }, clasp: s.clasp?.view === view ? undefined : s.clasp })) : undefined} onCrop={!swap.generated.front && swap.references[view] ? () => setCrop({ view, detail: false }) : undefined} onClasp={!completePair(swap.generated) && (!swap.generated.front || showSource) && swap.references[view] ? () => setCrop({ view, detail: true }) : undefined} onRestore={!swap.generated.front && swap.originals?.[view] && swap.originals[view] !== swap.references[view] ? () => setSwap(s => ({ ...s, references: { ...s.references, [view]: s.originals?.[view] } })) : undefined} onError={setError} disabled={Boolean(busy)} loading={Boolean(busy) && !showSource && !swapPair[view]} />)}</div>
+          <div className="clasp-detail"><div><h3>3. Clasp detail <span className="small muted">Required</span></h3><p className="small muted">Select the whole closure from the front or back photo, including a little band on both sides.</p></div>{swap.clasp && <button className="clasp-preview" aria-label="Enlarge clasp detail" onClick={() => setZoom({ image: swap.clasp!.image, label: `Clasp detail · ${swap.clasp!.view}` })}><img src={imageSrc(swap.clasp.image)} alt={`Clasp detail from ${swap.clasp.view} photo`} /></button>}</div>
           <CanvasStatus busy={busy} canCancel={!busy.startsWith('Saving')} onCancel={() => controller.current?.abort()} label={swap.savedId ? 'Both views are saved. Download or start a new garment.' : 'Use clear mannequin photos of the same bra from both sides.'} />
         </div></div><Library title="Swap library" subtitle="Your generated garment photographs, saved together." records={swaps} loading={libraryLoading} onOpen={(image, label) => setZoom({ image, label })} disabled={Boolean(busy)} empty="Your completed bra swaps will appear here." />
       </section>}
     </main>
+    {crop && cropSource && <CropDialog image={cropSource} detail={crop.detail} close={() => setCrop(undefined)} onSave={image => setSwap(s => crop.detail ? { ...s, clasp: { image, view: crop.view } } : { ...s, originals: { ...s.originals, [crop.view]: cropSource }, references: { ...s.references, [crop.view]: image } })} />}
     {zoom && <ImageModal image={zoom.image} label={zoom.label} close={() => setZoom(undefined)} />}
   </div>;
 }

@@ -3,9 +3,10 @@ import { ArrowUpRight, Download, ImagePlus, LoaderCircle, RefreshCw, X } from 'l
 import { downloadImage, imageSrc, readImage } from '../lib/images';
 import { loadImage } from '../lib/library';
 import type { ImageAsset, StoredImage } from '../lib/types';
-export function ImageFrame({ label, hint, image, onUpload, disabled, loading, onError }: {
+export function ImageFrame({ label, hint, image, onUpload, disabled, loading, onError, onCrop, onClasp, onRestore }: {
   label: string; hint?: string; image?: ImageAsset; onUpload?: (image: ImageAsset) => void;
   disabled?: boolean; loading?: boolean; onError?: (error: string) => void;
+  onCrop?: () => void; onClasp?: () => void; onRestore?: () => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [reading, setReading] = useState(false);
@@ -31,6 +32,7 @@ export function ImageFrame({ label, hint, image, onUpload, disabled, loading, on
       {(reading || loading) && <div className="image-loading"><LoaderCircle className="spin" size={27} /><span>{reading ? 'Reading image' : 'Generating'}</span></div>}
     </div>
     {image && <div className="frame-footer"><span className="truncate small muted">{hint || image.name}</span><div className="icon-actions">{onUpload && <button className="icon-button" aria-label={`Replace ${label.toLowerCase()}`} onClick={() => input.current?.click()} disabled={disabled}><RefreshCw size={16} /></button>}<button className="icon-button" aria-label={`Download ${label.toLowerCase()}`} onClick={() => downloadImage(image, label)}><Download size={16} /></button></div></div>}
+    {image && (onCrop || onClasp) && <div className="photo-actions">{onCrop && <button className="text-button" disabled={disabled} aria-label={`Crop ${label.toLowerCase()}`} onClick={onCrop}>Crop photo</button>}{onClasp && <button className="text-button" disabled={disabled} aria-label={`Select clasp from ${label.toLowerCase()}`} onClick={onClasp}>Select clasp</button>}{onRestore && <button className="text-button" disabled={disabled} onClick={onRestore}>Restore original</button>}</div>}
     {onUpload && <input ref={input} type="file" hidden accept="image/jpeg,image/png,image/webp" aria-label={`Upload ${label.toLowerCase()}`} onChange={e => void upload(e.target.files?.[0])} disabled={disabled} />}
     {zoom && image && <ImageModal image={image} label={label} close={() => setZoom(false)} />}
   </div>;

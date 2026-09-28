@@ -40,7 +40,11 @@ service cloud.firestore {
             && imageValid(d.assets.identityBack, 'identityBack', recordId))
           || (d.kind == 'swap'
             && d.identityId.size() > 0
-            && d.assets.keys().hasOnly(['front', 'back', 'referenceFront', 'referenceBack'])
+            && d.assets.keys().hasOnly(['front', 'back', 'referenceFront', 'referenceBack', 'claspFront', 'claspBack'])
+            && (!('claspFront' in d.assets) || imageValid(d.assets.claspFront, 'claspFront', recordId))
+            && (!('claspBack' in d.assets) || imageValid(d.assets.claspBack, 'claspBack', recordId))
+            && !d.assets.keys().hasAll(['claspFront', 'claspBack'])
+            && (!d.promptVersion.matches('.*swap-v4.*') || d.assets.keys().hasAny(['claspFront', 'claspBack']))
             && exists(/databases/$(database)/documents/records/$(d.identityId))
             && get(/databases/$(database)/documents/records/$(d.identityId)).data.kind == 'identity'));
     }

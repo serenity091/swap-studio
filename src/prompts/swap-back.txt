@@ -15,3 +15,6 @@ PRESERVE THE PHOTO
 Keep MODEL_BASE's face, hair, skin, shoulders, arms, torso, pose, camera, crop, and lighting unchanged. Change only the garment and its immediate contact shadows. Preserve the uninterrupted white/off-white studio backdrop in all corners and around the hair and arms. Mannequin bodies, stands, rooms, shelves, mirrors, and wall fixtures contribute nothing to the output.
 
 Check the visible closure against BRA_BACK before returning the image: hardware count and arrangement, overlap, flap silhouette, stitch lines, and band proportions should match. Prioritize faithful construction over smoothing or beautifying details. Output only the photograph, with no annotations or comparison panels.
+
+CLASP DETAIL REFERENCE
+CLASP_DETAIL is a close crop from one of the original mannequin photos, not a different product. Use it as the authority for visible closure construction: hook/eye count, spacing, adjustment columns, flap overlap, edge shape and stitch paths. Use the full mannequin views to locate that closure and establish its scale relative to the band. Apply it only on the side where this product has its closure; do not add a second clasp to the opposite side. Copy visible detail without inventing hidden hardware. Background pixels in the crop are not part of the garment.

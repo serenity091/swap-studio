@@ -6,6 +6,7 @@ import type { ImageAsset } from '../src/lib/types';
 vi.mock('../src/lib/firebase', () => ({ auth: undefined, db: undefined, storage: undefined, isPreview: true, configError: '' }));
 vi.mock('../src/lib/gemini', () => ({ MODEL: 'gemini-3-pro-image', validateKey: vi.fn().mockResolvedValue(undefined), generateImage: vi.fn() }));
 vi.mock('../src/lib/images', async importOriginal => ({ ...await importOriginal<typeof import('../src/lib/images')>(), readImage: vi.fn().mockImplementation(async (f: File) => ({ name: f.name, data: 'AA==', mimeType: 'image/png', width: 900, height: 1200 })) }));
+vi.mock('../src/lib/crop', async importOriginal => ({ ...await importOriginal<typeof import('../src/lib/crop')>(), cropImage: vi.fn().mockResolvedValue({ name: 'clasp.png', data: 'AA==', mimeType: 'image/png', width: 180, height: 120 }) }));
 import App from '../src/App';
 import { generateImage } from '../src/lib/gemini';
 const img: ImageAsset = { name: 'test-output', data: 'AA==', mimeType: 'image/png', width: 900, height: 1200 };
@@ -13,6 +14,7 @@ beforeEach(() => {
   const values = new Map<string, string>();
   vi.stubGlobal('localStorage', { getItem: (k: string) => values.get(k) ?? null, setItem: (k: string, v: string) => values.set(k, v), removeItem: (k: string) => values.delete(k), clear: () => values.clear() });
   vi.stubGlobal('IntersectionObserver', class { callback: (entries: { isIntersecting: boolean }[]) => void; constructor(callback: (entries: { isIntersecting: boolean }[]) => void) { this.callback = callback; } observe() { this.callback([{ isIntersecting: true }]); } disconnect() {} unobserve() {} });
+  HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
   vi.stubGlobal('scrollTo', vi.fn());
   vi.mocked(generateImage).mockReset().mockResolvedValue({ image: img, history: [{ role: 'model', parts: [{ inlineData: { data: 'AA==', mimeType: 'image/png' }, thoughtSignature: 'test-signature' }] }] });
 });
@@ -47,6 +49,20 @@ it('requires two explicit approvals, then saves and restores an identity and an 
   expect(screen.queryByLabelText('Saved identity')).toBeNull();
   fireEvent.change(screen.getByLabelText('Bra name (optional)'), { target: { value: 'Test garment' } });
   for (const side of ['front', 'back']) fireEvent.change(screen.getByLabelText(`Upload ${side} view`, { selector: 'input' }), { target: { files: [file] } });
+  await screen.findByRole('button', { name: 'Select clasp from back view' });
+  expect((screen.getByRole('button', { name: 'Generate bra swap' }) as HTMLButtonElement).disabled).toBe(true);
+  async function selectClasp() {
+    fireEvent.click(screen.getByRole('button', { name: 'Select clasp from back view' }));
+    fireEvent.click(screen.getByText('Adjust selection'));
+    for (const [key, value] of Object.entries({ x: 40, y: 55, width: 20, height: 10 })) fireEvent.change(screen.getByLabelText(`Crop ${key} percent`), { target: { value } });
+    fireEvent.click(screen.getByRole('button', { name: 'Use clasp detail' }));
+    await screen.findByRole('img', { name: 'Clasp detail from back photo' });
+  }
+  await selectClasp();
+  fireEvent.change(screen.getByLabelText('Upload back view', { selector: 'input' }), { target: { files: [file] } });
+  await waitFor(() => expect(screen.queryByRole('img', { name: 'Clasp detail from back photo' })).toBeNull());
+  expect((screen.getByRole('button', { name: 'Generate bra swap' }) as HTMLButtonElement).disabled).toBe(true);
+  await selectClasp();
   await waitFor(() => expect((screen.getByRole('button', { name: 'Generate bra swap' }) as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(screen.getByRole('button', { name: 'Generate bra swap' }));
   await screen.findByText('Both views saved', { selector: '.saved-status' });

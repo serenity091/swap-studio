@@ -20,6 +20,7 @@ export type IdentityDraft = {
 };
 export type SwapDraft = {
   id: string; identityId: string; name: string; references: Pair; generated: Pair;
+  originals?: Pair; clasp?: { image: ImageAsset; view: View };
   frontHistory?: Content[]; resolution: Resolution; savedId?: string; promptVersion?: string;
 };
 export function newIdentity(): IdentityDraft {

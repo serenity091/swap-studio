@@ -59,6 +59,6 @@ export function StoredThumbnail({ asset, label, onOpen, actionLabel, selected, d
     });
     if (container.current) observer.observe(container.current);
     return () => { active = false; observer.disconnect(); };
-  }, [asset.path, attempt]);
+  }, [asset.path, asset.version, attempt]);
   return <div className="stored-image" ref={container}>{image ? <button onClick={() => onOpen?.(image)} disabled={disabled || !onOpen} aria-label={actionLabel || `View ${label}`} aria-pressed={selected}><img src={imageSrc(image)} alt={label} loading="lazy" /></button> : error ? <button className="thumb-error" onClick={() => setAttempt(n => n + 1)}>Image unavailable<br /><small>Click to retry</small></button> : <LoaderCircle className="spin muted" size={20} />}</div>;
 }

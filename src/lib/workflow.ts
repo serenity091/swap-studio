@@ -39,7 +39,7 @@ export async function prepareBases(draft: IdentityDraft, key: string, update: (d
 export function identityRecord(d: IdentityDraft, user: StudioUser, basesApproved: boolean): SaveInput {
   if (!d.identityApproved || !basesApproved || !completePair(d.generated) || !completePair(d.bases) || !completePair(d.references)) throw new Error('Both approval steps and all images are required before saving.');
   if (!d.name.trim()) throw new Error('Give this identity a name before saving.');
-  return { id: d.id, kind: 'identity', name: d.name.trim(), ownerId: user.uid, ownerName: user.email?.split('@')[0] || 'Studio member', createdAt: Date.now(), model: MODEL, resolution: d.resolution, promptVersion: PROMPT_VERSION, identityId: '', identityName: '', assets: { front: d.bases.front, back: d.bases.back, identityFront: d.generated.front, identityBack: d.generated.back, referenceFront: d.references.front, referenceBack: d.references.back } };
+  return { id: d.id, kind: 'identity', name: d.name.trim(), ownerId: user.uid, ownerName: user.email?.split('@')[0] || 'Studio member', createdAt: Date.now(), model: MODEL, resolution: d.resolution, promptVersion: PROMPT_VERSION, identityId: '', identityName: '', assets: { front: d.bases.front, back: d.bases.back } };
 }
 export async function generateSwap(draft: SwapDraft, identity: StudioRecord, key: string, update: (d: SwapDraft) => void, progress: (s: string) => void, signal?: AbortSignal) {
   if (identity.kind !== 'identity' || identity.id !== draft.identityId) throw new Error('Choose a saved identity first.');
@@ -77,5 +77,5 @@ export function swapRecord(d: SwapDraft, identity: StudioRecord, user: StudioUse
   if (!completePair(d.generated) || !completePair(d.references)) throw new Error('A complete front and back pair is required before saving.');
   if (identity.kind !== 'identity' || identity.id !== d.identityId) throw new Error('The selected identity does not match this swap.');
   if ((d.promptVersion?.includes('swap-v4') || d.promptVersion?.includes('swap-v5')) && !d.clasp) throw new Error('Clasp detail is required for this swap.');
-  return { id: d.id, kind: 'swap', name: d.name.trim() || `${identity.name} · Bra swap`, ownerId: user.uid, ownerName: user.email?.split('@')[0] || 'Studio member', createdAt: Date.now(), model: MODEL, resolution: d.resolution, promptVersion: d.promptVersion || PROMPT_VERSION, identityId: identity.id, identityName: identity.name, assets: { front: d.generated.front, back: d.generated.back, referenceFront: d.references.front, referenceBack: d.references.back, ...(d.clasp ? { [d.clasp.view === 'front' ? 'claspFront' : 'claspBack']: d.clasp.image } : {}) } };
+  return { id: d.id, kind: 'swap', name: d.name.trim() || `${identity.name} · Bra swap`, ownerId: user.uid, ownerName: user.email?.split('@')[0] || 'Studio member', createdAt: Date.now(), model: MODEL, resolution: d.resolution, promptVersion: d.promptVersion || PROMPT_VERSION, identityId: identity.id, identityName: identity.name, assets: { front: d.generated.front, back: d.generated.back } };
 }

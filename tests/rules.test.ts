@@ -1,66 +1,105 @@
-// Run through: npm run test:rules (requires Firestore and Storage emulators).
+// Run through npm run test:rules; no real account or Google generation is used.
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertFails, assertSucceeds, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getBytes } from 'firebase/storage';
-import { afterAll, beforeAll, describe, it } from 'vitest';
+import { doc, getDoc, getDocs, collection, setDoc, updateDoc, deleteDoc, writeBatch, type Firestore } from 'firebase/firestore';
+import { ref, uploadBytes, getBytes, deleteObject } from 'firebase/storage';
+import { afterAll, beforeAll, beforeEach, describe, it, expect } from 'vitest';
 let env: RulesTestEnvironment;
 const enabled = Boolean(process.env.FIRESTORE_EMULATOR_HOST);
-const record = (uid: string, id: string) => ({ id, kind: 'identity', name: 'Test model', ownerId: uid, ownerName: 'Tester', createdAt: Date.now(), model: 'gemini-3-pro-image', resolution: '2K', promptVersion: 'workflow-v1', identityId: '', identityName: '', assets: Object.fromEntries(['front', 'back', 'referenceFront', 'referenceBack', 'identityFront', 'identityBack'].map(slot => [slot, { path: `users/${uid}/${id}/${slot}`, name: 'test.png', mimeType: 'image/png', width: 900, height: 1200 }])) });
-describe.skipIf(!enabled)('Firebase shared-library rules', () => {
+const record = (uid: string, id: string, slot = 'identity-0') => ({ id, slot, state: 'saving', kind: slot.startsWith('identity') ? 'identity' : 'swap', name: 'Test model', ownerId: uid, ownerName: 'Tester', createdAt: Date.now(), model: 'gemini-3-pro-image', resolution: '2K', promptVersion: 'swap-v5-identity-framing', identityId: '', identityName: '', assets: Object.fromEntries(['front', 'back'].map(view => [view, { path: `library/${slot}/${view}`, version: id, bytes: 4, name: 'test.png', mimeType: 'image/png', width: 900, height: 1200 }])) });
+function allocate(db: Firestore, data: ReturnType<typeof record>) {
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'records', data.id), data);
+  batch.set(doc(db, 'librarySlots', data.slot), { ownerId: data.ownerId, recordId: data.id, kind: data.kind });
+  return batch.commit();
+}
+describe.skipIf(!enabled)('Firebase library capacity, deletion, and account-key rules', () => {
   beforeAll(async () => {
     env = await initializeTestEnvironment({ projectId: 'demo-swap-studio', firestore: { host: '127.0.0.1', port: 8080, rules: readFileSync('firebase/firestore.rules', 'utf8') }, storage: { host: '127.0.0.1', port: 9199, rules: readFileSync('firebase/storage.rules', 'utf8') } });
   });
+  beforeEach(async () => { await env.clearFirestore(); await env.clearStorage(); });
   afterAll(async () => { await env?.cleanup(); });
-  it('allows a creator to save and another member to read, but blocks outsiders and overwrites', async () => {
+  it('requires an atomic bounded reservation, shares reads, and forbids overwrites and extra assets', async () => {
     const alice = env.authenticatedContext('alice').firestore();
     const bob = env.authenticatedContext('bob').firestore();
-    const guest = env.unauthenticatedContext().firestore();
-    await assertSucceeds(setDoc(doc(alice, 'records', 'model-a'), record('alice', 'model-a')));
-    await assertSucceeds(getDoc(doc(bob, 'records', 'model-a')));
-    await assertFails(getDoc(doc(guest, 'records', 'model-a')));
-    await assertFails(setDoc(doc(bob, 'records', 'model-a'), record('bob', 'model-a')));
-    await assertFails(setDoc(doc(alice, 'records', 'spoofed'), record('bob', 'spoofed')));
-    await assertFails(setDoc(doc(alice, 'records', 'secret'), { ...record('alice', 'secret'), apiKey: 'should-not-be-stored' }));
-    await assertFails(setDoc(doc(alice, 'users', 'alice'), { password: 'should-not-be-stored' }));
+    await assertFails(setDoc(doc(alice, 'records', 'unreserved'), record('alice', 'unreserved')));
+    await assertSucceeds(allocate(alice, record('alice', 'a')));
+    await assertSucceeds(getDoc(doc(bob, 'records', 'a')));
+    await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'records', 'a')));
+    await assertFails(allocate(bob, record('bob', 'b')));
+    await assertFails(allocate(alice, record('alice', 'over-limit', 'identity-20')));
+    const extras = record('alice', 'extras', 'identity-1'); extras.assets.referenceFront = extras.assets.front;
+    await assertFails(allocate(alice, extras));
+    await assertFails(allocate(alice, { ...record('alice', 'bad', 'identity-1'), ownerId: 'bob' }));
+    const large = record('alice', 'large', 'identity-1'); large.assets.front.bytes = 16 * 1024 * 1024 + 1;
+    await assertFails(allocate(alice, large));
+    const path = record('alice', 'bad-path', 'identity-1'); path.assets.front.path = 'library/identity-0/front';
+    await assertFails(allocate(alice, path));
+    await assertSucceeds(updateDoc(doc(alice, 'records', 'a'), { state: 'ready' }));
+    await assertFails(updateDoc(doc(alice, 'records', 'a'), { state: 'saving' }));
   });
-  it('rejects incomplete assets and references outside the creator path', async () => {
+  it('enforces 20 identity slots across accounts, including simultaneous claims', async () => {
     const alice = env.authenticatedContext('alice').firestore();
-    const incomplete = record('alice', 'incomplete');
-    delete incomplete.assets.back;
-    await assertFails(setDoc(doc(alice, 'records', 'incomplete'), incomplete));
-    const badPath = record('alice', 'bad-path');
-    badPath.assets.front.path = 'users/bob/other/front';
-    await assertFails(setDoc(doc(alice, 'records', 'bad-path'), badPath));
+    const bob = env.authenticatedContext('bob').firestore();
+    const claims = await Promise.allSettled([allocate(alice, record('alice', 'race-a')), allocate(bob, record('bob', 'race-b'))]);
+    expect(claims.filter(r => r.status === 'fulfilled')).toHaveLength(1);
+    for (let i = 1; i < 20; i++) await assertSucceeds(allocate(alice, record('alice', `model-${i}`, `identity-${i}`)));
+    await assertFails(allocate(bob, record('bob', 'model-21', 'identity-20')));
+    await assertFails(allocate(bob, record('bob', 'collision', 'identity-19')));
   });
-  it('validates saved clasp details and keeps legacy swaps compatible', async () => {
+  it('saves swaps with only final views, preserves dimension checks, and rejects slot 101', async () => {
     const alice = env.authenticatedContext('alice').firestore();
-    await assertSucceeds(setDoc(doc(alice, 'records', 'clasp-model'), record('alice', 'clasp-model')));
-    const swap = { ...record('alice', 'clasp-swap'), kind: 'swap', identityId: 'clasp-model', promptVersion: 'swap-v5-identity-framing' };
-    delete swap.assets.identityFront; delete swap.assets.identityBack;
-    await assertFails(setDoc(doc(alice, 'records', 'clasp-swap'), swap));
-    swap.assets.claspBack = { ...swap.assets.back, path: 'users/alice/clasp-swap/claspBack' };
-    await assertSucceeds(setDoc(doc(alice, 'records', 'clasp-swap'), swap));
+    await allocate(alice, record('alice', 'identity'));
+    await updateDoc(doc(alice, 'records', 'identity'), { state: 'ready' });
+    const swap = { ...record('alice', 'swap', 'swap-99'), identityId: 'identity' };
     swap.assets.front.width = 2816;
-    await assertFails(setDoc(doc(alice, 'records', 'clasp-swap'), swap));
+    await assertFails(allocate(alice, swap));
     swap.assets.front.width = 900;
-    swap.assets.claspBack.path = 'users/bob/clasp-swap/claspBack';
-    await assertFails(setDoc(doc(alice, 'records', 'clasp-swap'), swap));
-    delete swap.assets.claspBack;
-    await assertSucceeds(setDoc(doc(alice, 'records', 'clasp-swap'), { ...swap, promptVersion: 'swap-v3-product-fidelity' }));
-    const bytes = new Uint8Array([137, 80, 78, 71]);
-    await assertSucceeds(uploadBytes(ref(env.authenticatedContext('alice').storage(), 'users/alice/clasp-swap/claspBack'), bytes, { contentType: 'image/png' }));
-    await assertFails(uploadBytes(ref(env.authenticatedContext('bob').storage(), 'users/alice/clasp-swap/claspBack'), bytes, { contentType: 'image/png' }));
+    await assertSucceeds(allocate(alice, swap));
+    await assertFails(allocate(alice, { ...record('alice', 'over', 'swap-100'), identityId: 'identity' }));
   });
-  it('limits image reads to members and image writes to the uploader', async () => {
-    const alice = env.authenticatedContext('alice').storage();
-    const bob = env.authenticatedContext('bob').storage();
-    const guest = env.unauthenticatedContext().storage();
+  it('deletes owned images, blocks other members, and frees a slot only in the deletion transaction', async () => {
+    const aliceContext = env.authenticatedContext('alice');
+    const db = aliceContext.firestore(); const storage = aliceContext.storage();
+    const bob = env.authenticatedContext('bob');
+    await allocate(db, record('alice', 'a'));
+    const imageRef = ref(storage, 'library/identity-0/front');
     const bytes = new Uint8Array([137, 80, 78, 71]);
-    await assertSucceeds(uploadBytes(ref(alice, 'users/alice/model-a/front'), bytes, { contentType: 'image/png' }));
-    await assertSucceeds(getBytes(ref(bob, 'users/alice/model-a/front')));
-    await assertFails(getBytes(ref(guest, 'users/alice/model-a/front')));
-    await assertFails(uploadBytes(ref(bob, 'users/alice/model-a/front'), bytes, { contentType: 'image/png' }));
-    await assertFails(uploadBytes(ref(alice, 'users/alice/model-a/back'), bytes, { contentType: 'text/html' }));
+    const meta = { contentType: 'image/png', customMetadata: { recordId: 'a' } };
+    await assertSucceeds(uploadBytes(imageRef, bytes, meta));
+    await assertFails(uploadBytes(ref(storage, 'library/identity-0/referenceFront'), bytes, meta));
+    await assertFails(uploadBytes(ref(storage, 'library/identity-1/front'), bytes, meta));
+    await assertFails(uploadBytes(ref(storage, 'users/alice/a/front'), bytes, meta));
+    await assertFails(uploadBytes(ref(storage, 'library/identity-0/back'), new Uint8Array(5), meta));
+    await assertFails(uploadBytes(ref(bob.storage(), 'library/identity-0/back'), bytes, meta));
+    await assertSucceeds(updateDoc(doc(db, 'records', 'a'), { state: 'ready' }));
+    await assertSucceeds(getBytes(ref(bob.storage(), 'library/identity-0/front')));
+    await assertFails(getBytes(ref(env.unauthenticatedContext().storage(), 'library/identity-0/front')));
+    await assertFails(uploadBytes(imageRef, bytes, meta));
+    await assertFails(deleteObject(imageRef));
+    await assertFails(updateDoc(doc(bob.firestore(), 'records', 'a'), { state: 'deleting' }));
+    await assertSucceeds(updateDoc(doc(db, 'records', 'a'), { state: 'deleting' }));
+    await assertFails(deleteObject(ref(bob.storage(), 'library/identity-0/front')));
+    await assertSucceeds(deleteObject(imageRef));
+    await assertFails(deleteDoc(doc(db, 'records', 'a')));
+    await assertFails(deleteDoc(doc(db, 'librarySlots', 'identity-0')));
+    const batch = writeBatch(db); batch.delete(doc(db, 'records', 'a')); batch.delete(doc(db, 'librarySlots', 'identity-0'));
+    await assertSucceeds(batch.commit());
+    await assertSucceeds(allocate(bob.firestore(), record('bob', 'new-occupant')));
+    await assertFails(uploadBytes(imageRef, bytes, meta));
+  });
+  it('keeps account keys private even from other members and disallows collection listing', async () => {
+    const alice = env.authenticatedContext('alice').firestore();
+    const bob = env.authenticatedContext('bob').firestore();
+    const keyRef = doc(alice, 'privateKeys', 'alice');
+    await assertSucceeds(setDoc(keyRef, { key: 'TEST_ONLY_FAKE_KEY', updatedAt: Date.now() }));
+    await assertSucceeds(getDoc(keyRef));
+    await assertFails(getDoc(doc(bob, 'privateKeys', 'alice')));
+    await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'privateKeys', 'alice')));
+    await assertFails(getDocs(collection(alice, 'privateKeys')));
+    await assertFails(setDoc(doc(bob, 'privateKeys', 'alice'), { key: 'TEST_ONLY_FAKE_KEY', updatedAt: Date.now() }));
+    await assertFails(deleteDoc(doc(bob, 'privateKeys', 'alice')));
+    await assertSucceeds(deleteDoc(keyRef));
+    await assertFails(setDoc(doc(alice, 'users', 'alice'), { password: 'not-allowed' }));
   });
 });

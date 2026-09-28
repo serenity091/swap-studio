@@ -1,0 +1,43 @@
+// @vitest-environment jsdom
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+vi.mock('../src/lib/firebase', () => ({ auth: {}, db: {}, storage: {}, isPreview: false, configError: '' }));
+vi.mock('firebase/auth', () => ({ onAuthStateChanged: vi.fn((_auth, cb) => { cb({ uid: 'alice', email: 'alice@example.test' }); return () => {}; }), signOut: vi.fn(), sendPasswordResetEmail: vi.fn(), signInWithEmailAndPassword: vi.fn() }));
+vi.mock('../src/lib/account-key', () => ({ getAccountKey: vi.fn(), saveAccountKey: vi.fn() }));
+vi.mock('../src/lib/library', () => ({ clearImageCache: vi.fn(), watchLibrary: vi.fn(cb => { cb([]); return () => {}; }), checkCapacity: vi.fn(), loadImage: vi.fn(), saveRecord: vi.fn(), deleteRecord: vi.fn() }));
+vi.mock('../src/lib/local', () => ({ clearLegacyDrafts: vi.fn().mockResolvedValue(undefined), localGet: vi.fn(), localSet: vi.fn() }));
+vi.mock('../src/lib/gemini', () => ({ MODEL: 'test', validateKey: vi.fn().mockResolvedValue(undefined), generateImage: vi.fn() }));
+import { getAccountKey, saveAccountKey } from '../src/lib/account-key';
+import { localGet, localSet } from '../src/lib/local';
+import App from '../src/App';
+beforeEach(() => { vi.clearAllMocks(); vi.mocked(saveAccountKey).mockResolvedValue(undefined); vi.spyOn(Storage.prototype, 'setItem'); HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); }; });
+afterEach(cleanup);
+it('loads the account key on each device mount without reading or writing browser drafts or keys', async () => {
+  vi.mocked(getAccountKey).mockResolvedValue('TEST_ONLY_ACCOUNT_KEY');
+  const firstDevice = render(<App />);
+  await screen.findByRole('heading', { name: 'Create identity' });
+  expect(getAccountKey).toHaveBeenCalledWith('alice');
+  firstDevice.unmount();
+  render(<App />);
+  await screen.findByRole('heading', { name: 'Create identity' });
+  expect(getAccountKey).toHaveBeenCalledTimes(2);
+  expect(localGet).not.toHaveBeenCalled(); expect(localSet).not.toHaveBeenCalled();
+  expect(Storage.prototype.setItem).not.toHaveBeenCalled();
+});
+it('requires a successful database save, then allows removing the account key', async () => {
+  vi.mocked(getAccountKey).mockResolvedValue('');
+  vi.mocked(saveAccountKey).mockRejectedValueOnce(new Error('Account save failed'));
+  render(<App />);
+  fireEvent.change(await screen.findByLabelText('Google API key'), { target: { value: 'TEST_ONLY_NEW_KEY' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Connect & open studio' }));
+  await screen.findByText('Account save failed');
+  expect(screen.queryByRole('heading', { name: 'Create identity' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Connect & open studio' }));
+  await screen.findByRole('heading', { name: 'Create identity' });
+  expect(saveAccountKey).toHaveBeenLastCalledWith('alice', 'TEST_ONLY_NEW_KEY');
+  fireEvent.click(screen.getByRole('button', { name: 'API key connected' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Remove key from my account' }));
+  await waitFor(() => expect(saveAccountKey).toHaveBeenLastCalledWith('alice', ''));
+  await screen.findByRole('button', { name: 'Connect & open studio' });
+  expect(Storage.prototype.setItem).not.toHaveBeenCalled();
+});

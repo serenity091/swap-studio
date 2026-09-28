@@ -279,3 +279,5 @@ select { appearance: none; padding-right: 32px; }
 .background-credit { margin-bottom:0 !important; font-size:.7rem; }
 
 .swap-compare-controls { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+
+.library-actions { display: flex; gap: 6px; align-items: center; }

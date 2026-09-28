@@ -1,14 +1,26 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    match /users/{userId}/{recordId}/{slot} {
-      allow read: if request.auth != null;
-      allow create, update: if request.auth != null && request.auth.uid == userId
-        && slot in ['front', 'back', 'referenceFront', 'referenceBack', 'identityFront', 'identityBack', 'claspFront', 'claspBack']
-        && request.resource.size > 0 && request.resource.size < 30 * 1024 * 1024
-        && request.resource.contentType in ['image/jpeg', 'image/png', 'image/webp'];
-      allow delete: if false;
+    function record(slot) {
+      let allocation = firestore.get(/databases/(default)/documents/librarySlots/$(slot)).data;
+      return firestore.get(/databases/(default)/documents/records/$(allocation.recordId)).data;
     }
+    match /library/{slot}/{view} {
+      function owned() { return request.auth != null && record(slot).ownerId == request.auth.uid; }
+      function validImage() {
+        let d = record(slot);
+        return d.state == 'saving' && request.resource.metadata.recordId == d.id
+          && request.resource.size == d.assets[view].bytes
+          && request.resource.size > 0 && request.resource.size <= 16 * 1024 * 1024
+          && request.resource.contentType == d.assets[view].mimeType
+          && request.resource.contentType in ['image/jpeg', 'image/png', 'image/webp'];
+      }
+      allow read: if request.auth != null;
+      allow create, update: if view in ['front', 'back'] && owned() && validImage();
+      allow delete: if view in ['front', 'back'] && owned() && record(slot).state == 'deleting';
+    }
+    // Read-only compatibility while existing approved pairs are migrated.
+    match /users/{userId}/{recordId}/{view} { allow read: if request.auth != null; }
     match /{allPaths=**} { allow read, write: if false; }
   }
 }

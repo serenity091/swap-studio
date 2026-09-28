@@ -26,3 +26,23 @@ export async function localSet(key: string, value: unknown): Promise<void> {
     tx.onerror = () => reject(new Error('Draft could not be saved on this device. Keep this tab open and download your images.'));
   });
 }
+
+export async function localDelete(key: string): Promise<void> {
+  const db = await open();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('data', 'readwrite');
+    tx.objectStore('data').delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(new Error('Could not delete the local image.'));
+  });
+}
+
+export function clearLegacyDrafts(): Promise<void> {
+  // Production no longer persists drafts; clear the old app database without opening it.
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.deleteDatabase('swap-studio');
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(new Error('Could not remove the old browser drafts.'));
+    request.onblocked = () => reject(new Error('Close older studio tabs and reload to remove old browser drafts.'));
+  });
+}

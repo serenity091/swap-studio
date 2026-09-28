@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { expect, it, vi } from 'vitest';
 vi.mock('../src/lib/firebase', () => ({ storage: {}, db: {}, isPreview: false }));
-vi.mock('firebase/storage', () => ({ ref: vi.fn(() => ({})), uploadBytes: vi.fn(), getBlob: vi.fn() }));
+vi.mock('firebase/storage', () => ({ ref: vi.fn(() => ({})), uploadBytes: vi.fn(), getBlob: vi.fn(), deleteObject: vi.fn() }));
 vi.mock('../src/lib/images', () => ({
   readImage: vi.fn(async (blob: Blob) => {
     if (blob.type !== 'image/jpeg') throw new Error('Choose a JPG, PNG, or WebP image.');

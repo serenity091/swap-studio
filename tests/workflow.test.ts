@@ -27,6 +27,7 @@ describe('identity workflow', () => {
     expect(() => identityRecord(d, user, true)).toThrow('approval');
     expect(() => identityRecord({ ...d, identityApproved: true }, user, false)).toThrow('approval');
     expect(identityRecord({ ...d, identityApproved: true }, user, true).assets.front.data).toBe('bf');
+    expect(Object.keys(identityRecord({ ...d, identityApproved: true }, user, true).assets)).toEqual(['front', 'back']);
   });
   it('keeps a completed front when the back fails and only retries the back', async () => {
     const d = { ...newIdentity(), references: { front: img('ref-f'), back: img('ref-b') } };
@@ -66,7 +67,7 @@ describe('garment swaps', () => {
     expect(() => swapRecord(result, identity, user)).toThrow('approve');
     expect(result.frontHistory).toBeUndefined();
     expect(calls[1][0].prompt).toContain('crop from BRA_BACK');
-    expect(swapRecord(result, identity, user, true).assets.claspBack).toEqual(img('clasp'));
+    expect(Object.keys(swapRecord(result, identity, user, true).assets)).toEqual(['front', 'back']);
     expect(swapRecord(result, identity, user, true).identityId).toBe('identity-1');
     expect(swapRecord(result, identity, user, true).promptVersion).toBe(SWAP_PROMPT_VERSION);
   });

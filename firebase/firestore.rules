@@ -2,11 +2,16 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
-    function imageValid(image, slot, recordId) {
+    function validSlot(slot, kind) {
+      return (kind == 'identity' && slot.matches('identity-([0-9]|1[0-9])'))
+        || (kind == 'swap' && slot.matches('swap-([0-9]|[1-9][0-9])'));
+    }
+    function imageValid(image, view, d) {
       return image is map
-        && image.keys().hasAll(['path', 'name', 'mimeType', 'width', 'height'])
-        && image.keys().hasOnly(['path', 'name', 'mimeType', 'width', 'height'])
-        && image.path == 'users/' + request.auth.uid + '/' + recordId + '/' + slot
+        && image.keys().hasAll(['path', 'name', 'mimeType', 'width', 'height', 'version', 'bytes'])
+        && image.keys().hasOnly(['path', 'name', 'mimeType', 'width', 'height', 'version', 'bytes'])
+        && image.path == 'library/' + d.slot + '/' + view && image.version == d.id
+        && image.bytes is int && image.bytes > 0 && image.bytes <= 16 * 1024 * 1024
         && image.name is string && image.name.size() <= 255
         && image.mimeType in ['image/png', 'image/jpeg', 'image/webp']
         && image.width is int && image.width > 0 && image.width <= 16384
@@ -19,51 +24,57 @@ service cloud.firestore {
     }
     function validRecord(recordId) {
       let d = request.resource.data;
+      let slot = getAfter(/databases/$(database)/documents/librarySlots/$(d.slot)).data;
       return signedIn()
-        && d.keys().hasAll(['id', 'kind', 'name', 'ownerId', 'ownerName', 'createdAt', 'model', 'resolution', 'promptVersion', 'assets', 'identityId', 'identityName'])
-        && d.keys().hasOnly(['id', 'kind', 'name', 'ownerId', 'ownerName', 'createdAt', 'model', 'resolution', 'promptVersion', 'assets', 'identityId', 'identityName'])
-        && d.id == recordId && d.ownerId == request.auth.uid
-        && d.kind in ['identity', 'swap']
+        && d.keys().hasAll(['id', 'kind', 'name', 'ownerId', 'ownerName', 'createdAt', 'model', 'resolution', 'promptVersion', 'assets', 'identityId', 'identityName', 'slot', 'state'])
+        && d.keys().hasOnly(['id', 'kind', 'name', 'ownerId', 'ownerName', 'createdAt', 'model', 'resolution', 'promptVersion', 'assets', 'identityId', 'identityName', 'slot', 'state'])
+        && d.id == recordId && d.ownerId == request.auth.uid && d.state == 'saving'
+        && validSlot(d.slot, d.kind) && slot.recordId == d.id && slot.ownerId == d.ownerId && slot.kind == d.kind
         && d.name is string && d.name.size() > 0 && d.name.size() <= 120
-        && d.ownerName is string && d.ownerName.size() <= 100
-        && d.createdAt is int
-        && d.model is string && d.model.size() <= 120
-        && d.resolution in ['1K', '2K', '4K']
+        && d.ownerName is string && d.ownerName.size() <= 100 && d.createdAt is int
+        && d.model is string && d.model.size() <= 120 && d.resolution in ['1K', '2K', '4K']
         && d.promptVersion is string && d.promptVersion.size() <= 80
         && d.identityId is string && d.identityName is string && d.identityName.size() <= 120
-        && d.assets is map
-        && d.assets.keys().hasAll(['front', 'back', 'referenceFront', 'referenceBack'])
-        && imageValid(d.assets.front, 'front', recordId)
-        && imageValid(d.assets.back, 'back', recordId)
-        && imageValid(d.assets.referenceFront, 'referenceFront', recordId)
-        && imageValid(d.assets.referenceBack, 'referenceBack', recordId)
-        && ((d.kind == 'identity'
-            && d.identityId == '' && d.identityName == ''
-            && d.assets.keys().hasAll(['identityFront', 'identityBack'])
-            && d.assets.keys().hasOnly(['front', 'back', 'referenceFront', 'referenceBack', 'identityFront', 'identityBack'])
-            && imageValid(d.assets.identityFront, 'identityFront', recordId)
-            && imageValid(d.assets.identityBack, 'identityBack', recordId))
-          || (d.kind == 'swap'
-            && d.identityId.size() > 0
-            && d.assets.keys().hasOnly(['front', 'back', 'referenceFront', 'referenceBack', 'claspFront', 'claspBack'])
-            && (!('claspFront' in d.assets) || imageValid(d.assets.claspFront, 'claspFront', recordId))
-            && (!('claspBack' in d.assets) || imageValid(d.assets.claspBack, 'claspBack', recordId))
-            && !d.assets.keys().hasAll(['claspFront', 'claspBack'])
-            && (!d.promptVersion.matches('.*swap-v[45].*') || d.assets.keys().hasAny(['claspFront', 'claspBack']))
-            && exists(/databases/$(database)/documents/records/$(d.identityId))
+        && d.assets is map && d.assets.keys().hasAll(['front', 'back']) && d.assets.keys().hasOnly(['front', 'back'])
+        && imageValid(d.assets.front, 'front', d) && imageValid(d.assets.back, 'back', d)
+        && ((d.kind == 'identity' && d.identityId == '' && d.identityName == '')
+          || (d.kind == 'swap' && d.identityId.size() > 0
             && get(/databases/$(database)/documents/records/$(d.identityId)).data.kind == 'identity'
+            && get(/databases/$(database)/documents/records/$(d.identityId)).data.state == 'ready'
             && (!d.promptVersion.matches('.*swap-v5.*') || sameSwapDimensions(d))));
+    }
+    match /librarySlots/{slotId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasAll(['recordId', 'ownerId', 'kind'])
+        && request.resource.data.keys().hasOnly(['recordId', 'ownerId', 'kind'])
+        && request.resource.data.ownerId == request.auth.uid
+        && validSlot(slotId, request.resource.data.kind)
+        && getAfter(/databases/$(database)/documents/records/$(request.resource.data.recordId)).data.slot == slotId
+        && getAfter(/databases/$(database)/documents/records/$(request.resource.data.recordId)).data.ownerId == request.auth.uid;
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.ownerId == request.auth.uid
+        && !existsAfter(/databases/$(database)/documents/records/$(resource.data.recordId));
     }
     match /records/{recordId} {
       allow read: if signedIn();
       allow create: if validRecord(recordId);
       allow update: if signedIn() && resource.data.ownerId == request.auth.uid
-        && request.resource.data.kind == resource.data.kind
-        && request.resource.data.identityId == resource.data.identityId
-        && validRecord(recordId);
-      allow delete: if false;
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state'])
+        && ((resource.data.state == 'saving' && request.resource.data.state == 'ready')
+          || request.resource.data.state == 'deleting');
+      allow delete: if signedIn() && resource.data.ownerId == request.auth.uid && resource.data.state == 'deleting'
+        && !existsAfter(/databases/$(database)/documents/librarySlots/$(resource.data.slot));
     }
-    // Passwords and Google API keys never belong in Firestore.
+    match /privateKeys/{uid} {
+      allow get, delete: if signedIn() && request.auth.uid == uid;
+      allow list: if false;
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasAll(['key', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['key', 'updatedAt'])
+        && request.resource.data.key is string && request.resource.data.key.size() > 0 && request.resource.data.key.size() <= 256
+        && request.resource.data.updatedAt is int;
+    }
     match /{document=**} { allow read, write: if false; }
   }
 }

@@ -75,7 +75,7 @@ describe('garment swaps', () => {
     expect(request.history).toBeUndefined();
     expect(request.images.map(i => i.name)).toEqual(['base-b', 'mannequin-b', 'mannequin-f', 'kept-front']);
     expect(result.generated.front).toBe(d.generated.front);
-    expect(swapRecord(result, identity, user).promptVersion).toBe('workflow-v1-front+swap-v2-back');
+    expect(swapRecord(result, identity, user).promptVersion).toBe('workflow-v1-front+swap-v3-back');
   });
   it('refuses incomplete pairs and mismatched identities', async () => {
     const d = { ...newSwap(), identityId: 'another-identity' };

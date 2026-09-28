@@ -1,10 +1,17 @@
-Edit MODEL_BASE: add the bra from BRA_BACK to this same model in this exact back-view pose. Return one photorealistic back-view photograph.
+Transfer the exact bra in BRA_BACK onto MODEL_BASE. This is a product-accurate garment edit for an ecommerce photograph. Return one back-view image in MODEL_BASE's original framing.
 
-REFERENCE ROLES
-MODEL_BASE is the only source for the person, rear pose, framing, lighting, and background. BRA_BACK supplies rear garment construction. BRA_FRONT clarifies the same product's design. FRONT_RESULT supplies only the garment's rendered color and fabric appearance; it does not control the pose or background.
+REFERENCE PRIORITY
+MODEL_BASE controls the person, pose, body, lighting, and background. BRA_BACK is the authority for every visible rear garment detail. BRA_FRONT clarifies matching fabric and construction. FRONT_RESULT is a secondary color/appearance reference only; if it differs from the real product, follow the mannequin photos. Neither the model base's old clothing nor FRONT_RESULT may redesign the product.
 
-Keep MODEL_BASE's head, hair, skin, shoulders, arms, torso, camera angle, and crop unchanged. Preserve its clean white/off-white studio background across the entire frame, including the top corners and spaces around the hair and arms. Every area outside the added garment and its immediate contact shadows should remain visually unchanged.
+CLASP AND CONSTRUCTION
+Inspect BRA_BACK's fastening before rendering. Reproduce the visible closure as the same manufactured component:
+- Same fastening type and visible number of hooks/eyes; same vertical spacing and horizontal adjustment columns where visible.
+- Same left/right orientation, overlap direction, engaged position, and exposed hardware. Preserve which fabric flap lies on top and how much of the eye tape is exposed.
+- Same flap outline, rounded or square corners, edge binding, thickness, and width-to-height ratio relative to the band.
+- Same stitching paths, seam placement, hook/eye shapes, finish, and surrounding fabric texture. Preserve visible asymmetry and small construction features.
+Copy what is visible, including partial occlusion. Do not invent hidden rows or replace the closure with a generic clasp. Keep closure geometry intact while adapting only its perspective and attachment to the existing torso; fit adjustments belong in the surrounding fabric. Match band contour, strap widths, attachment points, sliders, rings, seams, and trim with the same care.
 
-Match BRA_BACK's band shape and height, straps and attachment points, adjusters, closure, seams, trim, and hardware. Product construction comes from the mannequin bra, fitted naturally to the existing body. Keep the same garment color and material as the front result, with lighting from MODEL_BASE.
+PRESERVE THE PHOTO
+Keep MODEL_BASE's face, hair, skin, shoulders, arms, torso, pose, camera, crop, and lighting unchanged. Change only the garment and its immediate contact shadows. Preserve the uninterrupted white/off-white studio backdrop in all corners and around the hair and arms. Mannequin bodies, stands, rooms, shelves, mirrors, and wall fixtures contribute nothing to the output.
 
-Exclude all scenery and objects from the product references: mannequin, stand, room, shelves, mirrors, wall fixtures, labels, and other clothing. The entire finished backdrop is the uninterrupted plain studio backdrop from MODEL_BASE. No body reshaping, added text, or collage.
+Check the visible closure against BRA_BACK before returning the image: hardware count and arrangement, overlap, flap silhouette, stitch lines, and band proportions should match. Prioritize faithful construction over smoothing or beautifying details. Output only the photograph, with no annotations or comparison panels.

@@ -1,10 +1,13 @@
-Edit MODEL_BASE: replace only its bra with the product in BRA_FRONT. Return one photorealistic front-view photograph.
+Replace only the bra in MODEL_BASE with the exact product in BRA_FRONT. This is a product-accurate garment edit for an ecommerce photograph. Return one front-view image in MODEL_BASE's original framing.
 
-REFERENCE ROLES
-MODEL_BASE is the only source for the person, pose, framing, lighting, and background. BRA_FRONT supplies front garment construction; BRA_BACK supplies strap and band continuity. Both bra references are product samples only.
+REFERENCE PRIORITY
+MODEL_BASE controls the person, pose, body, lighting, and background. BRA_FRONT is the authority for visible front garment details. BRA_BACK clarifies strap, band, and rear construction. The model base's neutral bra supplies no design details for the replacement.
 
-Keep MODEL_BASE's face, hair, skin, body shape, pose, hands, camera angle, crop, and lighting unchanged. Preserve its clean white/off-white studio background across the entire frame, including spaces around the arms and hair. Every area outside the garment and its immediate contact shadows should remain visually unchanged.
+PRODUCT ACCURACY
+Reproduce the actual cup silhouette, neckline, center bridge, panel boundaries, seam paths, fabric texture, color, lace pattern, trim, and strap widths from BRA_FRONT. Copy visible hardware as specific manufactured parts: same count, shape, proportions, position, orientation, and attachment. If a front clasp is visible, preserve its fastening type, overlap direction, flap outline, corner shape, and stitching. Read these details from this product; do not substitute a generic bra design or invent concealed features.
+Fit the product to the existing body through perspective, natural fabric tension, and contact shadows. Preserve opaque coverage where needed. Keep seams and hardware geometrically consistent with the reference rather than smoothing, simplifying, mirroring, or embellishing them.
 
-Fit the reference bra naturally to this body. Match its color, fabric, cups, neckline, seams, band, straps, trim, and hardware. Use BRA_FRONT for visible front details. Preserve opaque coverage where needed and use subtle contact shadows consistent with MODEL_BASE.
+PRESERVE THE PHOTO
+Keep MODEL_BASE's face, hair, skin, body shape, pose, hands, camera angle, crop, and lighting unchanged. Every area outside the garment and its immediate contact shadows should remain visually unchanged. Preserve its uninterrupted white/off-white studio backdrop, including spaces around the arms and hair. Mannequin bodies, stands, rooms, shelves, mirrors, fixtures, and labels contribute nothing to the output.
 
-Exclude all scenery and objects from the product references: mannequin, stand, room, shelves, mirrors, fixtures, labels, and other clothing. The finished image shows only the original model wearing the target bra against MODEL_BASE's uninterrupted plain studio backdrop. No body reshaping, added text, or collage.
+Check the visible garment against BRA_FRONT before returning the image: silhouette, seams, straps, hardware, material, and color should match. Prioritize faithful construction over cosmetic improvement. Output only the photograph, with no annotations or comparison panels.

@@ -58,7 +58,7 @@ export async function generateSwap(draft: SwapDraft, identity: StudioRecord, key
     // A fresh edit has one unambiguous base and avoids resending the entire front conversation.
     // The generated front remains a visual reference for the garment's appearance only.
     const result = await generateImage({ key, prompt: PROMPTS.swapBack, images: [base, draft.references.back, draft.references.front, next.generated.front!], imageLabels: ['MODEL_BASE', 'BRA_BACK', 'BRA_FRONT', 'FRONT_RESULT'], resolution: draft.resolution, signal });
-    next = { ...next, generated: { ...next.generated, back: result.image }, frontHistory: undefined, promptVersion: next.promptVersion || 'workflow-v1-front+swap-v2-back' }; update(next);
+    next = { ...next, generated: { ...next.generated, back: result.image }, frontHistory: undefined, promptVersion: next.promptVersion === SWAP_PROMPT_VERSION ? SWAP_PROMPT_VERSION : `${next.promptVersion || PROMPT_VERSION}-front+swap-v3-back` }; update(next);
   }
   return next;
 }

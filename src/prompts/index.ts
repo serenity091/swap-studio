@@ -6,4 +6,4 @@ import swapFront from './swap-front.txt?raw';
 import swapBack from './swap-back.txt?raw';
 export const PROMPTS = { identityFront, identityBack, bareBack, neutralBase, swapFront, swapBack };
 export const PROMPT_VERSION = 'workflow-v1';
-export const SWAP_PROMPT_VERSION = 'swap-v2-named-references';
+export const SWAP_PROMPT_VERSION = 'swap-v3-product-fidelity';

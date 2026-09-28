@@ -15,6 +15,7 @@ export function extractImage(parts: Part[]) {
   return [...parts].reverse().find(p => !p.thought && p.inlineData?.mimeType.startsWith('image/'))?.inlineData;
 }
 function apiError(status: number, message?: string) {
+  if (/prepayment credits.*depleted|prepaid.*(?:depleted|exhausted)|insufficient.*(?:credits|balance)/i.test(message || '')) return 'Your Google AI Studio API credits are depleted. Add credits in Google AI Studio, then retry. Your uploaded photos are kept.';
   if (status === 400 && message?.toLowerCase().includes('api key')) return 'The API key is invalid. Check it in API key settings.';
   if (status === 401 || status === 403) return 'This key does not have access. Check the key, API restrictions, and project billing in Google AI Studio.';
   if (status === 404) return `The configured model (${MODEL}) is unavailable for this key. Check model access in Google AI Studio.`;

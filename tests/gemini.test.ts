@@ -39,6 +39,12 @@ describe('Gemini response handling', () => {
     await expect(generateImage(options)).rejects.toThrow('quota');
     expect(mock).toHaveBeenCalledTimes(1);
   });
+  it('reports exhausted prepaid credits clearly without retrying', async () => {
+    const mock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { message: 'Your prepayment credits are depleted. Please go to AI Studio to manage billing.' } }), { status: 400 }));
+    vi.stubGlobal('fetch', mock);
+    await expect(generateImage(options)).rejects.toThrow('Your Google AI Studio API credits are depleted.');
+    expect(mock).toHaveBeenCalledTimes(1);
+  });
   it('checks the API key through model metadata without generating an image', async () => {
     const mock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ name: 'models/gemini-3-pro-image' })));
     vi.stubGlobal('fetch', mock);

@@ -17,7 +17,7 @@ A GitHub Pages app for creating fictional adult model identities and swapping br
 
 Images are saved as files in Firebase Storage. Firestore holds names, image paths, model/resolution metadata, creator identifiers, and identity links. All signed-in members can see and use the shared library; only a record's creator can write that record or its images. Account passwords are handled by Firebase Authentication, never stored as Firestore documents.
 
-Photo and clasp crops use browser Canvas to copy original pixels into lossless PNGs, without AI generation or upscaling. Originals are retained in the local draft for re-cropping and restoration; clasp selection always uses the original upload. Replacing its source photo clears the old clasp selection. Automatic background removal is not included. Existing completed drafts can still retry saving without regeneration.
+Photo and clasp crops use browser Canvas to copy original pixels into lossless PNGs, without AI generation or upscaling. Originals are retained in the local draft for re-cropping and restoration; clasp selection always uses the original upload. Replacing its source photo clears the old clasp selection. Optional **Remove background** runs IMG.LY ISNet segmentation in a local worker and composites the mannequin and bra onto white at the input resolution. Preview and explicitly apply the result; use **Undo background removal** or **Restore original** to revert. Clasp selection always uses the untouched original upload. Model/runtime assets download from staticimgly.com on first use; image pixels stay on the device during removal. No Gemini request is made. Crop after removal operates on the cleaned photo. Existing completed drafts can still retry saving without regeneration.
 
 Draft images and conversation context persist in IndexedDB on the current browser, scoped by Firebase user ID. A failed back-view request keeps the finished front and lets the user retry only the missing view. Save retries use the same record ID and file paths; they do not regenerate paid images. Incomplete swap pairs stay as local drafts until both views are ready. Regeneration replaces the current unsaved draft; rejected variants are not archived in the shared library.
 
@@ -115,3 +115,7 @@ The rule tests use a local `demo-swap-studio` project and do not access your rea
 - [Firebase Storage billing requirements](https://firebase.google.com/docs/storage/faqs-storage-changes-announced-sept-2024)
 - [GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages)
 - [GitHub Pages limits](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits)
+
+## Background removal licensing
+
+This app integrates `@imgly/background-removal` 1.7.0 (IMG.LY, AGPL-3.0). Its license is distributed in `public/licenses/imgly-AGPL-3.0.txt`; upstream source is at https://github.com/imgly/background-removal-js. Complete application source and build instructions are available in this public repository: https://github.com/serenity091/swap-studio. ONNX Runtime is MIT licensed; see `public/licenses/onnxruntime-LICENSE.txt`.

@@ -3,6 +3,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, CircleUserRound, FolderOpen, KeyRound, LoaderCircle, LogOut, Plus, RefreshCw, Shirt, Sparkles, X } from 'lucide-react';
 import { auth, configError, isPreview } from './lib/firebase';
 import { AuthGate, Brand, GateLayout, KeyForm, SetupGate } from './components/Gates';
+import { BackgroundDialog } from './components/BackgroundDialog';
 import { CropDialog } from './components/CropDialog';
 import { imageSrc } from './lib/images';
 import { ImageFrame, ImageModal, StoredThumbnail } from './components/Images';
@@ -66,7 +67,9 @@ function Workspace({ user, apiKey, onKeySettings, logout, initialNotice }: { use
   const [showSource, setShowSource] = useState(false);
   const [zoom, setZoom] = useState<{ image: ImageAsset; label: string }>();
   const [crop, setCrop] = useState<{ view: 'front' | 'back'; detail: boolean }>();
-  const cropSource = crop && (swap.originals?.[crop.view] || swap.references[crop.view]);
+  const cropSource = crop && (crop.detail ? swap.originals?.[crop.view] || swap.references[crop.view] : swap.references[crop.view]);
+  const [backgroundView, setBackgroundView] = useState<'front' | 'back'>();
+  const backgroundSource = backgroundView && swap.references[backgroundView];
   const controller = useRef<AbortController | undefined>(undefined);
   const saving = useRef(false);
   const draftKey = `drafts:${user.uid}`;
@@ -164,13 +167,14 @@ function Workspace({ user, apiKey, onKeySettings, logout, initialNotice }: { use
           {swap.savedId && <div className="saved-status"><CheckCircle2 size={20} />Both views saved</div>}
           <p className="save-note">Results save automatically.</p><PromptDetails kind="swap" />
         </aside><div className="canvas-panel"><div className="canvas-header"><div><span className="eyebrow">{swap.generated.front && !showSource ? 'Result' : '2. Upload your bra'}</span><span className="canvas-subtitle">Front & back</span></div>{swap.generated.front && <ViewToggle value={showSource} onChange={setShowSource} sourceLabel="References" />}</div>
-          <div className="image-pair">{(['front', 'back'] as const).map(view => <ImageFrame key={view} label={`${view === 'front' ? 'Front' : 'Back'} view`} image={swapPair[view]} hint={!swap.generated.front || showSource ? `Bra on mannequin · ${view}` : selected?.name} onUpload={!swap.generated.front ? image => setSwap(s => ({ ...s, references: { ...s.references, [view]: image }, originals: { ...s.originals, [view]: image }, clasp: s.clasp?.view === view ? undefined : s.clasp })) : undefined} onCrop={!swap.generated.front && swap.references[view] ? () => setCrop({ view, detail: false }) : undefined} onClasp={!completePair(swap.generated) && (!swap.generated.front || showSource) && swap.references[view] ? () => setCrop({ view, detail: true }) : undefined} onRestore={!swap.generated.front && swap.originals?.[view] && swap.originals[view] !== swap.references[view] ? () => setSwap(s => ({ ...s, references: { ...s.references, [view]: s.originals?.[view] } })) : undefined} onError={setError} disabled={Boolean(busy)} loading={Boolean(busy) && !showSource && !swapPair[view]} />)}</div>
+          <div className="image-pair">{(['front', 'back'] as const).map(view => <ImageFrame key={view} label={`${view === 'front' ? 'Front' : 'Back'} view`} image={swapPair[view]} hint={!swap.generated.front || showSource ? `Bra on mannequin · ${view}` : selected?.name} onUpload={!swap.generated.front ? image => setSwap(s => ({ ...s, references: { ...s.references, [view]: image }, originals: { ...s.originals, [view]: image }, beforeBackground: { ...s.beforeBackground, [view]: undefined }, clasp: s.clasp?.view === view ? undefined : s.clasp })) : undefined} onCrop={!swap.generated.front && swap.references[view] ? () => setCrop({ view, detail: false }) : undefined} onClasp={!completePair(swap.generated) && (!swap.generated.front || showSource) && swap.references[view] ? () => setCrop({ view, detail: true }) : undefined} onRemoveBackground={!swap.generated.front && swap.references[view] ? () => setBackgroundView(view) : undefined} onUndoBackground={!swap.generated.front && swap.beforeBackground?.[view] ? () => setSwap(s => ({ ...s, references: { ...s.references, [view]: s.beforeBackground?.[view] }, beforeBackground: { ...s.beforeBackground, [view]: undefined } })) : undefined} onRestore={!swap.generated.front && swap.originals?.[view] && swap.originals[view] !== swap.references[view] ? () => setSwap(s => ({ ...s, references: { ...s.references, [view]: s.originals?.[view] }, beforeBackground: { ...s.beforeBackground, [view]: undefined } })) : undefined} onError={setError} disabled={Boolean(busy)} loading={Boolean(busy) && !showSource && !swapPair[view]} />)}</div>
           <div className="clasp-detail"><div><h3>3. Clasp detail <span className="small muted">Required</span></h3><p className="small muted">Select the whole closure from the front or back photo, including a little band on both sides.</p></div>{swap.clasp && <button className="clasp-preview" aria-label="Enlarge clasp detail" onClick={() => setZoom({ image: swap.clasp!.image, label: `Clasp detail · ${swap.clasp!.view}` })}><img src={imageSrc(swap.clasp.image)} alt={`Clasp detail from ${swap.clasp.view} photo`} /></button>}</div>
           <CanvasStatus busy={busy} canCancel={!busy.startsWith('Saving')} onCancel={() => controller.current?.abort()} label={swap.savedId ? 'Both views are saved. Download or start a new garment.' : 'Use clear mannequin photos of the same bra from both sides.'} />
         </div></div><Library title="Swap library" subtitle="Your generated garment photographs, saved together." records={swaps} loading={libraryLoading} onOpen={(image, label) => setZoom({ image, label })} disabled={Boolean(busy)} empty="Your completed bra swaps will appear here." />
       </section>}
     </main>
-    {crop && cropSource && <CropDialog image={cropSource} detail={crop.detail} close={() => setCrop(undefined)} onSave={image => setSwap(s => crop.detail ? { ...s, clasp: { image, view: crop.view } } : { ...s, originals: { ...s.originals, [crop.view]: cropSource }, references: { ...s.references, [crop.view]: image } })} />}
+    {backgroundView && backgroundSource && <BackgroundDialog image={backgroundSource} close={() => setBackgroundView(undefined)} onSave={image => setSwap(s => ({ ...s, originals: { ...s.originals, [backgroundView]: s.originals?.[backgroundView] || backgroundSource }, beforeBackground: { ...s.beforeBackground, [backgroundView]: backgroundSource }, references: { ...s.references, [backgroundView]: image } }))} />}
+    {crop && cropSource && <CropDialog image={cropSource} detail={crop.detail} close={() => setCrop(undefined)} onSave={image => setSwap(s => crop.detail ? { ...s, clasp: { image, view: crop.view } } : { ...s, originals: { ...s.originals, [crop.view]: s.originals?.[crop.view] || cropSource }, references: { ...s.references, [crop.view]: image } })} />}
     {zoom && <ImageModal image={zoom.image} label={zoom.label} close={() => setZoom(undefined)} />}
   </div>;
 }

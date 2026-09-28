@@ -272,3 +272,8 @@ select { appearance: none; padding-right: 32px; }
 .crop-numbers input { width:100%; padding:8px; border:1px solid var(--line); border-radius:4px; }
 .crop-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:14px; }
 @media(max-width:480px) { .clasp-detail { flex-wrap:wrap; } .crop-dialog { padding:14px; } }
+
+.background-preview { margin-top:12px; background:white; text-align:center; border:1px solid var(--line); border-radius:6px; }
+.background-preview img { display:block; margin:auto; max-width:100%; max-height:50dvh; object-fit:contain; }
+.background-progress { display:flex; gap:8px; align-items:center; }
+.background-credit { margin-bottom:0 !important; font-size:.7rem; }

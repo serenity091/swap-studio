@@ -5,7 +5,7 @@ export type Pair = Partial<Record<View, ImageAsset>>;
 export type Part = { text?: string; inlineData?: { mimeType: string; data: string }; thought?: boolean; thoughtSignature?: string; [key: string]: unknown };
 export type Content = { role: 'user' | 'model'; parts: Part[] };
 export type Generation = { image: ImageAsset; history: Content[] };
-export type StoredImage = Omit<ImageAsset, 'data'> & { path: string; version?: string; bytes?: number };
+export type StoredImage = Omit<ImageAsset, 'data'> & { path: string; version?: string; bytes?: number; thumbnail?: Omit<StoredImage, 'thumbnail'> };
 export type StudioRecord = {
   id: string; kind: 'identity' | 'swap'; name: string; ownerId: string; ownerName: string;
   createdAt: number; model: string; resolution: Resolution; promptVersion: string;

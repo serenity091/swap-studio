@@ -97,13 +97,21 @@ Firebase encrypts stored data at rest; this is not end-to-end encryption. Fireba
 ## Library limits and deletion
 
 - Shared limits: **20 identities and 100 swaps**, two final images each, **16 MiB per image** maximum. Larger images are rejected before upload without downsampling; download the result to keep it.
-- Maximum live library image bytes: `120 × 2 × 16 MiB = 3.75 GiB`. This leaves room below the bucket's 5 GB-month free allowance. No references, intermediate identities, mannequin photos, or clasp crops are archived.
-- Limits are enforced using fixed `librarySlots` reservations and Storage paths (`library/{slot}/{front|back}`). Allocation and record creation are atomic; simultaneous clients cannot claim the same slot. Record IDs remain unique, so a reused slot never changes historical identity links.
-- Failed uploads remain visible as unfinished items and occupy a slot. Retry saving the same open draft, or delete the unfinished item. Deletion marks the item first, removes both objects, then atomically removes its record and slot. Failed deletion can be retried. Fixed paths bound orphaned live objects too.
+- Maximum live library image bytes including previews: `120 × 2 × (16 MiB + 128 KiB) ≈ 3.78 GiB`. This leaves room below the bucket's 5 GB-month free allowance. No references, intermediate identities, mannequin photos, or clasp crops are archived.
+- Limits are enforced using fixed `librarySlots` reservations and Storage paths (`library/{slot}/{front|back}` and `{front|back}-thumb`). Allocation and record creation are atomic; simultaneous clients cannot claim the same slot. Record IDs remain unique, so a reused slot never changes historical identity links.
+- Failed uploads remain visible as unfinished items and occupy a slot. Retry saving the same open draft, or delete the unfinished item. Deletion marks the item first, removes both originals and their previews, then atomically removes its record and slot. Failed deletion can be retried. Fixed paths bound orphaned live objects too.
 - Creator-only Delete buttons remove records and image files. Download any desired copies first. Deleting an identity leaves existing swaps intact, but that identity cannot be used for new swaps.
 - The deployed `US-EAST1` bucket has soft delete disabled so deleted/overwritten images do not accumulate seven days of billable backups. Deletion is permanent. Objects soft-deleted before this setting changed keep their original retention period.
 - Firebase Storage **requires Blaze**. The [Cloud Storage free allowance](https://cloud.google.com/storage/pricing#cloud-storage-always-free) is 5 GB-month storage, 5,000 Class A and 50,000 Class B operations/month, and eligible transfer allowances. These are shared regional/project usage allowances; library caps cannot guarantee a $0 bill for download traffic, operations, other data, or Google image generation. Budget alerts are not spending caps.
 - New projects must deploy both rulesets and grant the Storage rules service agent permission to read Firestore when prompted by Firebase CLI. Keep bucket object versioning disabled and disable soft delete if permanent deletion is intended.
+
+## Image caching and bandwidth
+
+- Saved originals remain unchanged in Firebase. Each gets a JPEG preview with a maximum 480-pixel long edge and a strict 128 KiB limit. Library cards, identity selection, and selected-model previews request these small files lazily. Opening an image, comparing an identity, or generating a swap loads the full original.
+- Saved image blobs are cached in a separate `swap-studio-image-cache` IndexedDB database. The cache is limited to **200 MiB total**, evicts least recently used images, and expires copies after **30 days**. Keys include the signed-in account, Storage path, and record version, so reusing a library slot cannot return the previous image. Only image blobs and cache metadata are stored; Google keys and production drafts stay out of persistent browser storage.
+- Current library snapshots remove deleted image versions from the active account's cache; explicit deletion removes that image's cached copies across accounts on the device. Sign-out clears decoded images from memory; disk copies remain for the same account's next visit, accessible through the app only after sign-in. Clearing site data removes them. New devices must download their own copies.
+- All cloud image downloads still use authenticated Firebase Storage requests. HTTP responses retain `private, no-store` because application-managed caching provides version/account separation and explicit eviction. Cache hits need no Storage request. If browser storage is unavailable or full, the app falls back to cloud downloads.
+- Preview files consume a little additional cloud storage (at most 30 MiB across a full library) to reduce browsing bandwidth. Caching does not reduce original cloud storage size or guarantee zero charges.
 
 ## Verification
 

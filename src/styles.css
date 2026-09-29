@@ -154,8 +154,9 @@ select { appearance: none; padding-right: 32px; }
 .library-pair > div { position: relative; }
 .library-pair > div > span { position: absolute; bottom: 8px; left: 8px; font-size: .65rem; background: #ffffffde; padding: 3px 5px; border-radius: 4px; color: var(--muted); pointer-events: none; }
 .stored-image { aspect-ratio: 3/4; display: flex; justify-content: center; align-items: center; background: #fff0f5; min-width: 0; overflow: hidden; }
-.stored-image button { padding: 0; width: 100%; height: 100%; }
+.stored-image button { position: relative; padding: 0; width: 100%; height: 100%; }
 .stored-image button:disabled { opacity: 1; }
+.thumbnail-status { position: absolute; bottom: 8px; left: 8px; right: 8px; padding: 6px; border-radius: 4px; background: #fff; color: var(--ink); font-size: .75rem; }
 .stored-image img { width: 100%; height: 100%; object-fit: contain; }
 .stored-image .thumb-error { display: block; text-align: center; font-size: .75rem; color: var(--danger); padding: 10px; }
 .thumb-error small { font-size: .75rem; }

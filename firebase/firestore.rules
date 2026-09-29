@@ -6,16 +6,23 @@ service cloud.firestore {
       return (kind == 'identity' && slot.matches('identity-([0-9]|1[0-9])'))
         || (kind == 'swap' && slot.matches('swap-([0-9]|[1-9][0-9])'));
     }
-    function imageValid(image, view, d) {
+    function fileValid(image, path, version, maxBytes, maxSide) {
       return image is map
         && image.keys().hasAll(['path', 'name', 'mimeType', 'width', 'height', 'version', 'bytes'])
-        && image.keys().hasOnly(['path', 'name', 'mimeType', 'width', 'height', 'version', 'bytes'])
-        && image.path == 'library/' + d.slot + '/' + view && image.version == d.id
-        && image.bytes is int && image.bytes > 0 && image.bytes <= 16 * 1024 * 1024
+        && image.path == path && image.version == version
+        && image.bytes is int && image.bytes > 0 && image.bytes <= maxBytes
         && image.name is string && image.name.size() <= 255
         && image.mimeType in ['image/png', 'image/jpeg', 'image/webp']
-        && image.width is int && image.width > 0 && image.width <= 16384
-        && image.height is int && image.height > 0 && image.height <= 16384;
+        && image.width is int && image.width > 0 && image.width <= maxSide
+        && image.height is int && image.height > 0 && image.height <= maxSide;
+    }
+    function imageValid(image, view, d) {
+      return fileValid(image, 'library/' + d.slot + '/' + view, d.id, 16 * 1024 * 1024, 16384)
+        && image.keys().hasOnly(['path', 'name', 'mimeType', 'width', 'height', 'version', 'bytes', 'thumbnail'])
+        && (!('thumbnail' in image) || (
+          fileValid(image.thumbnail, 'library/' + d.slot + '/' + view + '-thumb', d.id, 128 * 1024, 480)
+          && image.thumbnail.mimeType == 'image/jpeg'
+          && image.thumbnail.keys().hasOnly(['path', 'name', 'mimeType', 'width', 'height', 'version', 'bytes'])));
     }
     function sameSwapDimensions(d) {
       let base = get(/databases/$(database)/documents/records/$(d.identityId)).data.assets;

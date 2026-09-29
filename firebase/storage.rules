@@ -19,6 +19,17 @@ service firebase.storage {
       allow create, update: if view in ['front', 'back'] && owned() && validImage();
       allow delete: if view in ['front', 'back'] && owned() && record(slot).state == 'deleting';
     }
+    match /library/{slot}/{file} {
+      function thumbnail() { return record(slot).assets[file == 'front-thumb' ? 'front' : 'back'].thumbnail; }
+      function owned() { return request.auth != null && record(slot).ownerId == request.auth.uid; }
+      allow create, update: if file in ['front-thumb', 'back-thumb'] && owned()
+        && record(slot).state == 'saving' && request.resource.metadata.recordId == record(slot).id
+        && request.resource.size == thumbnail().bytes
+        && request.resource.size > 0 && request.resource.size <= 128 * 1024
+        && request.resource.contentType == 'image/jpeg';
+      // Always clean both fixed preview paths, including an interrupted older-client deletion.
+      allow delete: if file in ['front-thumb', 'back-thumb'] && owned() && record(slot).state == 'deleting';
+    }
     // Read-only compatibility while existing approved pairs are migrated.
     match /users/{userId}/{recordId}/{view} { allow read: if request.auth != null; }
     match /{allPaths=**} { allow read, write: if false; }
